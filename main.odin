@@ -11,34 +11,47 @@ HEXAGON_ANGLE: f32 = 2.0 * math.PI / HEXAGON_SIDES
 HEXAGON_WIDTH: f32 = HEXAGON_RADIUS * 2
 HEXAGON_HEIGHT: f32 = HEXAGON_RADIUS * math.SQRT_THREE
 
-HIVE_HORIZONTAL_SIZE    :: 5
-HIVE_VERTICAL_SIZE      :: 12
+SCREEN_WIDTH  :: 900
+SCREEN_HEIGHT :: 940
+SCREEN_PADDING_X :: 50
+SCREEN_PADDING_Y :: 50
 
-SCREEN_WIDTH  :: 800
-SCREEN_HEIGHT :: 800
+SPACING_X :: 10
+SPACING_Y :: 10
 
-FONT_SIZE :: 14
+FONT_SIZE :: 12
 FONT_SPACING :: 1
 FONT: rl.Font
 
+HIVE_HORIZONTAL_SIZE    :: 7
+HIVE_VERTICAL_SIZE      :: 15
 hive:           [HIVE_HORIZONTAL_SIZE][HIVE_VERTICAL_SIZE]Bug
 
-players: [2]Player
+PLAYERS :: 2
+players: [PLAYERS]Player
 
 Player :: struct {
     id: int,
-    hand: [10]Bug,
-    hive_positions: [10][2]int,
+    hand: [11]Bug,
+    hive_positions: [11][2]int,
     color: rl.Color
 }
 
 Bug :: enum {
+    Queen,
     Ant,
+    Grasshopper,
+    Spider,
+    Beetle,
     Empty
 }
 
 Bug_Colors := [Bug]rl.Color {
-	.Ant = rl.BLUE,
+	.Queen = rl.YELLOW,
+	.Ant = rl.DARKBLUE,
+	.Grasshopper = rl.LIME,
+	.Spider = rl.RED,
+	.Beetle = rl.BLUE,
 	.Empty = rl.WHITE,
 }
 
@@ -62,24 +75,27 @@ main :: proc() {
 init_game :: proc() {
 
     // Init Players
-    for i in 0..<len(players) {
+    assert(len(players) == PLAYERS)
+    for i in 0..<PLAYERS {
         players[i] = Player{ }
         players[i].id = i+1
-        players[i].hand[0] = .Ant
+        players[i].hand[0] = .Queen
         players[i].hand[1] = .Ant
         players[i].hand[2] = .Ant
-        players[i].hand[3] = .Empty
-        players[i].hand[4] = .Empty
-        players[i].hand[5] = .Empty
-        players[i].hand[6] = .Empty
-        players[i].hand[7] = .Empty
-        players[i].hand[8] = .Empty
-        players[i].hand[9] = .Empty
+        players[i].hand[3] = .Ant
+        players[i].hand[4] = .Grasshopper
+        players[i].hand[5] = .Grasshopper
+        players[i].hand[6] = .Grasshopper
+        players[i].hand[7] = .Spider
+        players[i].hand[8] = .Spider
+        players[i].hand[9] = .Beetle
+        players[i].hand[10] = .Beetle
         for j in 0..<len(players[i].hive_positions) {
             players[i].hive_positions[j] = {-1, -1}
         }
     }
 
+    // Assign player colors
     assert(len(players) == 2)
     players[0].color = rl.BEIGE
     players[1].color = rl.BLACK
@@ -92,7 +108,7 @@ init_game :: proc() {
         }
     }
 
-    place_bug(&players[0], {2, 5}, 0)
+    // place_bug(&players[0], {2, 5}, 0)
 
 }
 
@@ -150,9 +166,10 @@ draw_game :: proc() {
 
     rl.ClearBackground(rl.RAYWHITE)
 
+
     offset := rl.Vector2 {
-        SCREEN_WIDTH/8,
-        SCREEN_HEIGHT/8,
+        SCREEN_PADDING_X,
+        SCREEN_PADDING_Y,
     }
 
     controller := offset.x
@@ -183,10 +200,14 @@ draw_game :: proc() {
         for bug in player.hand {
             if bug != .Empty {
                 draw_bug(offset, bug, player.color)
-                offset.x += HEXAGON_WIDTH * 1.05
+                offset.x += HEXAGON_WIDTH + SPACING_X
+            }
+            if offset.x > SCREEN_WIDTH - SCREEN_PADDING_X {
+                offset.x = controller
+                offset.y += HEXAGON_HEIGHT + SPACING_Y
             }
         }
-        offset.y += HEXAGON_HEIGHT * 1.1
+        offset.y += HEXAGON_HEIGHT + SPACING_Y
     }
 
 }
