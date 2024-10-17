@@ -35,15 +35,15 @@ selection_i: int // Index into the player with turn's hand
 HIVE_X_LENGTH    :: 7
 HIVE_Y_LENGTH      :: 16
 hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
-place_positions: [HAND_SIZE * PLAYERS][2]int
+placeable_pieces: [HAND_SIZE * PLAYERS]Piece
 
 Bug_Colors := [Bug]rl.Color {
+    .Empty       = rl.WHITE,
     .Queen       = rl.YELLOW,
     .Ant         = rl.DARKBLUE,
     .Grasshopper = rl.LIME,
     .Spider      = rl.RED,
     .Beetle      = rl.BLUE,
-    .Empty       = rl.WHITE,
 }
 
 Even_Direction_Vectors := [Direction][2]int {
@@ -58,8 +58,8 @@ Even_Direction_Vectors := [Direction][2]int {
 // North and South do not change depeding on y, every other direction does
 Odd_Direction_Vectors := [Direction][2]int {
     .North     = Even_Direction_Vectors[.North],
-    .Northeast = { -1, -1 },
-    .Southeast = {  1, -1 },
+    .Northeast = {  1, -1 },
+    .Southeast = {  1,  1 },
     .South     = Even_Direction_Vectors[.South],
     .Southwest = {  0,  1 },
     .Northwest = {  0, -1 },
@@ -76,12 +76,12 @@ Player :: struct {
 }
 
 Bug :: enum {
+    Empty, // Zero Value
     Queen,
     Ant,
     Grasshopper,
     Spider,
     Beetle,
-    Empty
 }
 
 Direction :: enum {
@@ -106,7 +106,7 @@ main :: proc() {
     FONT = rl.GetFontDefault()
     rl.SetTargetFPS(60)
 
-    simulate_game()
+    // simulate_game()
 
     init_game()
     for !rl.WindowShouldClose() { // Detect window close button or ESC key
@@ -140,6 +140,7 @@ simulate_game :: proc() {
     positions: [100][2]int
     stopwatch: time.Stopwatch
     time.stopwatch_start(&stopwatch)
+    // TODO Save and read in game log
 
     for !rl.IsMouseButtonPressed(rl.MouseButton.RIGHT) {
         if rl.WindowShouldClose() {
@@ -152,6 +153,7 @@ simulate_game :: proc() {
             switch state {
             case 0:
                 positions[state] = get_start_position()
+                // TODO select bug and show where it can go
                 place_bug(positions[state], .Grasshopper)
             case 1:
                 positions[state], err = get_neighbor_position(positions[0], .Northeast)
@@ -215,19 +217,35 @@ init_game :: proc() {
         }
     }
 
+    init_placeable_pieces()
+    selection_i = -1
+
     fmt.println("Finished initializing state.")
 }
 
 update_game :: proc() {
 
     if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-        position := rl.GetMousePosition()
+        mouse := rl.GetMousePosition()
         for player, i in players {
             for piece, j in player.hand {
-                if within_bounds(piece.bounds, position) && i == player_with_turn {
-                    fmt.printf("Selected a %s from player_i %d at hand_i %d\n", piece.bug, i, j)
+                if within_bounds(piece.bounds, mouse) && i == player_with_turn {
+                    fmt.printf("Selected a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
+                    
+                    pieces, err := get_place_pieces(j)
+                    if err {
+                        // :TODO: handle when there is nowhere to place 
+                        assert(false)
+                    }
                     selection_i = j
+                    placeable_pieces = pieces
                 }
+            }
+        }
+        for piece in placeable_pieces {
+            if within_bounds(piece.bounds, mouse) {
+                assert(selection_i != -1)
+                place_piece(piece.hive_position, selection_i)
             }
         }
     }
@@ -240,14 +258,11 @@ update_game :: proc() {
 // Caller is responsible for asserting that the return value is true
 validate_hive :: proc() -> (valid_hive: bool) {
     valid_hive = true
-    occupied_positions := 0
 
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
             if hive[x][y] == .Empty {
                 continue
-            } else {
-                occupied_positions += 1
             }
 
             direction_vectors: [Direction][2]int
@@ -277,11 +292,86 @@ validate_hive :: proc() -> (valid_hive: bool) {
         }
     }
 
-    if occupied_positions <= 1 {
+    if get_occupied_positions() <= 1 {
         valid_hive = true
     }
 
     return valid_hive
+}
+
+init_placeable_pieces :: proc() {
+    placeable_pieces = [HAND_SIZE * PLAYERS]Piece{}
+    for &piece in placeable_pieces {
+        piece.hive_position = {-1, -1}
+    }
+}
+
+get_occupied_positions :: proc() -> (occupied_positions: int) {
+    for x in 0..<HIVE_X_LENGTH {
+        for y in 0..<HIVE_Y_LENGTH {
+            if hive[x][y] != .Empty {
+                occupied_positions += 1
+            }
+        }
+    }
+    return occupied_positions
+}
+
+
+get_place_pieces :: proc(i_hand: int) -> (pieces: [HAND_SIZE*PLAYERS]Piece, err: bool) {
+
+    for &piece in pieces {
+        piece.hive_position = {-1, -1}
+    }
+    pieces_i: int
+
+    for x in 0..<HIVE_X_LENGTH {
+        for y in 0..<HIVE_Y_LENGTH {
+
+            friendlies := 0
+            enemies := 0
+            position := [2]int{x, y}
+            for direction in Direction {
+                neighbor_position, err := get_neighbor_position(position, direction)
+                if err {
+                    continue
+                }
+                if hive[neighbor_position.x][neighbor_position.y] == .Empty {
+                    continue
+                }
+                player_i, _ := lookup_hive_position(neighbor_position)
+                if player_i == player_with_turn {
+                    friendlies += 1
+                } else {
+                    assert(player_i != player_with_turn)
+                    enemies += 1
+                }
+            }
+
+            if friendlies > 0 && enemies == 0 {
+                pieces[pieces_i].hive_position = position
+                pieces_i += 1
+            }
+        }
+    }
+
+    if get_occupied_positions() == 0 {
+        pieces[0].hive_position = get_start_position()
+    }
+    else if get_occupied_positions() == 1 {
+        for direction in Direction {
+            neighbor_position, err := get_neighbor_position(get_start_position(), direction)
+            assert(!err)
+            pieces[pieces_i].hive_position = neighbor_position
+            pieces_i += 1
+        }
+    }
+
+    if pieces[0].hive_position == {-1, -1} {
+        err = true
+    }
+
+    return pieces, err
 }
 
 within_bounds :: proc(bounds: Bounds, position: rl.Vector2) -> (within: bool) {
@@ -299,7 +389,7 @@ advance_turn :: proc() {
     assert(0 <= player_with_turn && player_with_turn < PLAYERS)
     player_with_turn += 1
     player_with_turn %= PLAYERS // Wrap around
-    fmt.printfln("Player %d's turn", player_with_turn)
+    // fmt.printfln("Player <%d>'s turn", player_with_turn)
     assert(0 <= player_with_turn && player_with_turn < PLAYERS)
 }
 
@@ -316,6 +406,7 @@ place_bug :: proc(hive_position: [2]int, bug: Bug) {
     place_piece(hive_position, i_hand)
 }
 
+// :TODO: Remove i_hand and use global selection_i
 place_piece :: proc(hive_position: [2]int, i_hand: int) {
     assert(0 <= i_hand          && i_hand          < HAND_SIZE)
     assert(0 <= hive_position.x && hive_position.x < HIVE_X_LENGTH)
@@ -327,10 +418,27 @@ place_piece :: proc(hive_position: [2]int, i_hand: int) {
     bug := players[player_with_turn].hand[i_hand].bug
     hive[hive_position.x][hive_position.y] = bug
     players[player_with_turn].hand[i_hand].hive_position = hive_position
-    fmt.printfln("Player %d placed %s at %d %d", player_with_turn, bug, hive_position.x, hive_position.y)
+    fmt.printfln("Player <%d> placed <%s> at <%d %d>", player_with_turn, bug, hive_position.x, hive_position.y)
+    init_placeable_pieces()
+    selection_i = -1
     advance_turn()
 
     assert(validate_hive())
+}
+
+update_bounds :: proc(bounds: ^Bounds, offset: rl.Vector2) {
+    bounds.min = {offset.x-HEXAGON_WIDTH_FRACTION, offset.y-HEXAGON_HEIGHT_FRACTION}
+    bounds.max = {offset.x+HEXAGON_WIDTH_FRACTION, offset.y+HEXAGON_HEIGHT_FRACTION}
+}
+
+should_highlight :: proc(hive_position: [2]int, offset: rl.Vector2) -> (highlight: bool) {
+    for &piece in placeable_pieces {
+        if piece.hive_position == hive_position {
+            update_bounds(&piece.bounds, offset) // :FIX: Not sure if i like this here
+            highlight = true
+        }
+    }
+    return highlight
 }
 
 lookup_hive_position :: proc(hive_position: [2]int) -> (int, int) {
@@ -362,9 +470,7 @@ draw_piece :: proc(offset: rl.Vector2, player_i: int, hand_i: int) {
     text_offset: rl.Vector2 = {offset.x-(text_size.x/2), offset.y-(text_size.y/2)}
     rl.DrawTextEx(FONT, text, text_offset, FONT_SIZE, FONT_SPACING, Bug_Colors[bug])
 
-    // Update bounds for selecting pieces
-    players[player_i].hand[hand_i].bounds.min = {offset.x-HEXAGON_WIDTH_FRACTION, offset.y-HEXAGON_HEIGHT_FRACTION}
-    players[player_i].hand[hand_i].bounds.max = {offset.x+HEXAGON_WIDTH_FRACTION, offset.y+HEXAGON_HEIGHT_FRACTION}
+    update_bounds(&players[player_i].hand[hand_i].bounds, offset)
 }
 
 draw_game :: proc() {
@@ -382,16 +488,20 @@ draw_game :: proc() {
     controller := offset.x
 
     // Draw da hive
-    for j in 0..<HIVE_Y_LENGTH {
-        offset.x = controller + (f32(j % 2) * HEXAGON_RADIUS * 1.5)
+    for y in 0..<HIVE_Y_LENGTH {
+        offset.x = controller + (f32(y % 2) * HEXAGON_RADIUS * 1.5)
         // fmt.println(j, rotate, width, height)
-        for i in 0..<HIVE_X_LENGTH {
-            if hive[i][j] == .Empty {
-                rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, 1, rl.GRAY)
-                rl.DrawTextEx(FONT, rl.TextFormat("%i %i", i, j), offset, FONT_SIZE, 2, rl.GRAY)
+        for x in 0..<HIVE_X_LENGTH {
+            if hive[x][y] == .Empty {
+                if should_highlight({x, y}, offset) {
+                    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, 3, rl.BLUE)
+                } else {
+                    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, 1, rl.GRAY)
+                }
+                rl.DrawTextEx(FONT, rl.TextFormat("%i %i", x, y), offset, FONT_SIZE, 2, rl.GRAY)
             }
             else {
-                player_i, hand_i := lookup_hive_position({i, j})
+                player_i, hand_i := lookup_hive_position({x, y})
                 draw_piece(offset, player_i, hand_i)
             }
             offset.x += 3 * HEXAGON_RADIUS
