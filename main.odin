@@ -115,6 +115,21 @@ main :: proc() {
     }
 }
 
+get_neighbor_position :: proc(position: [2]int, direction: Direction) -> ([2]int, bool) {
+
+    direction_vectors: [Direction][2]int
+    if position.y % 2 == 0 {
+        direction_vectors = Even_Direction_Vectors
+    } else {
+        direction_vectors = Odd_Direction_Vectors
+    }
+    vector := direction_vectors[direction]
+    neighbor_position := [2]int{position.x+vector.x, position.y+vector.y}
+    err := neighbor_position.x < 0 || HIVE_X_LENGTH <= neighbor_position.x || 
+          neighbor_position.y < 0 || HIVE_Y_LENGTH <= neighbor_position.y
+    return neighbor_position, err
+}
+
 simulate_game :: proc() {
     delay := 2000 * time.Millisecond
     fmt.printfln("Simulation starting with a delay of %f ms between states...", time.duration_milliseconds(delay))
@@ -122,6 +137,7 @@ simulate_game :: proc() {
     init_game()
 
     state := 0
+    positions: [100][2]int
     stopwatch: time.Stopwatch
     time.stopwatch_start(&stopwatch)
 
@@ -132,16 +148,19 @@ simulate_game :: proc() {
         }
 
         if time.stopwatch_duration(stopwatch) > delay {
+            err := false
             switch state {
             case 0:
-                place_bug({3, 7}, .Grasshopper)
+                positions[state] = get_start_position()
+                place_bug(positions[state], .Grasshopper)
             case 1:
-                place_bug({3, 8}, .Grasshopper)
+                positions[state], err = get_neighbor_position(positions[0], .Northeast)
+                place_bug(positions[state], .Grasshopper)
             case 2:
-                place_bug({4, 8}, .Queen)
-            case 3:
-                place_bug({2, 9}, .Queen)
+                positions[state], err = get_neighbor_position(positions[0], .Southwest)
+                place_bug(positions[state], .Grasshopper)
             }
+            assert(!err)
             state += 1
             time.stopwatch_reset(&stopwatch)
             time.stopwatch_start(&stopwatch)
@@ -288,7 +307,7 @@ advance_turn :: proc() {
 place_bug :: proc(hive_position: [2]int, bug: Bug) {
     i_hand := -1
     for piece, i in players[player_with_turn].hand {
-        if piece.bug == bug {
+        if piece.bug == bug && piece.hive_position == {-1, -1} {
             i_hand = i
             break
         }
@@ -301,6 +320,7 @@ place_piece :: proc(hive_position: [2]int, i_hand: int) {
     assert(0 <= i_hand          && i_hand          < HAND_SIZE)
     assert(0 <= hive_position.x && hive_position.x < HIVE_X_LENGTH)
     assert(0 <= hive_position.y && hive_position.y < HIVE_Y_LENGTH)
+    assert(hive[hive_position.x][hive_position.y] == .Empty)
     assert(players[player_with_turn].hand[i_hand].hive_position == {-1, -1})
     assert(validate_hive())
 
