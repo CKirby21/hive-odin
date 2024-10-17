@@ -34,7 +34,7 @@ selection_i: int // Index into the player with turn's hand
 
 HIVE_X_LENGTH    :: 7
 HIVE_Y_LENGTH      :: 16
-hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
+g_hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
 placeable_pieces: [HAND_SIZE * PLAYERS]Piece
 
 Bug_Colors := [Bug]rl.Color {
@@ -47,6 +47,7 @@ Bug_Colors := [Bug]rl.Color {
 }
 
 Even_Direction_Vectors := [Direction][2]int {
+    // .None      = {  0,  0 },
     .North     = {  0, -2 },
     .Northeast = {  0, -1 },
     .Southeast = {  0,  1 },
@@ -57,6 +58,7 @@ Even_Direction_Vectors := [Direction][2]int {
 
 // North and South do not change depeding on y, every other direction does
 Odd_Direction_Vectors := [Direction][2]int {
+    // .None      = {  0,  0 },
     .North     = Even_Direction_Vectors[.North],
     .Northeast = {  1, -1 },
     .Southeast = {  1,  1 },
@@ -64,6 +66,16 @@ Odd_Direction_Vectors := [Direction][2]int {
     .Southwest = {  0,  1 },
     .Northwest = {  0, -1 },
 }
+
+// Opposite_Directions := [Direction]Direction {
+//     .None      = .None,
+//     .North     = .South,
+//     .Northeast = .Southwest,
+//     .Southeast = .Northwest,
+//     .South     = .North,
+//     .Southwest = .Northeast,
+//     .Northwest = .Southeast,
+// }
 
 Bounds :: struct {
     min: rl.Vector2,
@@ -85,6 +97,7 @@ Bug :: enum {
 }
 
 Direction :: enum {
+    // None, // Zero Value
     North,
     Northeast,
     Southeast,
@@ -209,11 +222,11 @@ init_game :: proc() {
     players[1].color = rl.BLACK
 
     // Init Hive
-    assert(len(hive) == HIVE_X_LENGTH)
-    hive = {}
+    assert(len(g_hive) == HIVE_X_LENGTH)
+    g_hive = {}
     for i in 0..<HIVE_X_LENGTH {
         for j in 0..<HIVE_Y_LENGTH {
-            hive[i][j] = .Empty
+            g_hive[i][j] = .Empty
         }
     }
 
@@ -232,13 +245,17 @@ update_game :: proc() {
                 if within_bounds(piece.bounds, mouse) && i == player_with_turn {
                     fmt.printf("Selected a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
                     
-                    pieces, err := get_place_pieces(j)
+                    err: bool 
+                    if is_in_hand(j) {
+                        err = populate_places()
+                    } else {
+                        err = populate_moves(j)
+                    }
                     if err {
-                        // :TODO: handle when there is nowhere to place 
+                        // :TODO: handle when there is nowhere to place/move
                         assert(false)
                     }
                     selection_i = j
-                    placeable_pieces = pieces
                 }
             }
         }
@@ -256,45 +273,61 @@ update_game :: proc() {
 // is attached to at least one other bug
 //
 // Caller is responsible for asserting that the return value is true
-validate_hive :: proc() -> (valid_hive: bool) {
+validate_hive :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (valid_hive: bool) {
+
     valid_hive = true
 
+    occupied := get_occupied_positions(hive)
+    if occupied <= 1 {
+        return valid_hive
+    }
+    neighbor_positions: [HAND_SIZE * PLAYERS][2]int
+    for &position in neighbor_positions {
+        position = {-1, -1}
+    }
+
+    start := [2]int{-1, -1}
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
-            if hive[x][y] == .Empty {
+            if hive[x][y] != .Empty {
+                start = {x, y}
+            }
+        }
+    }
+    positions_i: int
+    neighbor_positions[positions_i] = start
+    positions_i += 1
+
+    for i in 0..<occupied {
+        position := neighbor_positions[i]
+        if position.x == -1 || position.y == -1 {
+            valid_hive = false
+            break
+        }
+        for direction in Direction {
+            neighbor_position, err := get_neighbor_position(position, direction)
+            if err {
                 continue
             }
-
-            direction_vectors: [Direction][2]int
-            if y % 2 == 0 {
-                direction_vectors = Even_Direction_Vectors
-            } else {
-                direction_vectors = Odd_Direction_Vectors
+            // fmt.println("Neighbor:", neighbor_position, err, direction, hive[neighbor_position.x][neighbor_position.y])
+            if hive[neighbor_position.x][neighbor_position.y] == .Empty {
+                continue
             }
-
-            valid_xy := false
-            for direction in Direction {
-                vector := direction_vectors[direction]
-                position := [2]int{x+vector.x, y+vector.y}
-                if position.x < 0 || HIVE_X_LENGTH <= position.x ||
-                   position.y < 0 || HIVE_Y_LENGTH <= position.y {
-                    continue
-                }
-                // fmt.println(x, y, "checks for neighbor at", position)
-                if hive[position.x][position.y] != .Empty {
-                    valid_xy = true
+            already_added := false
+            for j in 0..<occupied {
+                if neighbor_position == neighbor_positions[j] {
+                    already_added = true
                 }
             }
-
-            if !valid_xy {
-                valid_hive = false
+            if !already_added {
+                neighbor_positions[positions_i] = neighbor_position
+                positions_i += 1
             }
         }
     }
 
-    if get_occupied_positions() <= 1 {
-        valid_hive = true
-    }
+    fmt.println(neighbor_positions)
+    log.assertf(positions_i == occupied, "%d %d", positions_i, occupied)
 
     return valid_hive
 }
@@ -306,7 +339,7 @@ init_placeable_pieces :: proc() {
     }
 }
 
-get_occupied_positions :: proc() -> (occupied_positions: int) {
+get_occupied_positions :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (occupied_positions: int) {
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
             if hive[x][y] != .Empty {
@@ -317,12 +350,62 @@ get_occupied_positions :: proc() -> (occupied_positions: int) {
     return occupied_positions
 }
 
+populate_moves :: proc(i_hand: int) -> (err: bool) {
 
-get_place_pieces :: proc(i_hand: int) -> (pieces: [HAND_SIZE*PLAYERS]Piece, err: bool) {
+    log.assert(!is_in_hand(i_hand),
+        "Function should only be called if piece is already placed in the hive")
 
-    for &piece in pieces {
-        piece.hive_position = {-1, -1}
+    init_placeable_pieces()
+    pieces_i: int
+
+    // This is so that the current position does not contribute to the logic below
+    piece := players[player_with_turn].hand[i_hand]
+    hive := g_hive
+    hive[piece.hive_position.x][piece.hive_position.y] = .Empty
+
+    // Check if moving would break the hive
+    if !validate_hive(hive) {
+        err = true
+        return err
     }
+
+    for x in 0..<HIVE_X_LENGTH {
+        for y in 0..<HIVE_Y_LENGTH {
+
+            position := [2]int{x, y}
+            neighbors := 0
+            for direction in Direction {
+                neighbor_position, err := get_neighbor_position(position, direction)
+                if err {
+                    continue
+                }
+                if hive[neighbor_position.x][neighbor_position.y] != .Empty {
+                    neighbors += 1
+                }
+            }
+
+            // Add new piece
+            if 0 < neighbors && neighbors <= 4 && position != piece.hive_position {
+                placeable_pieces[pieces_i].hive_position = position
+                pieces_i += 1
+            }
+        }
+    }
+
+    if placeable_pieces[0].hive_position == {-1, -1} {
+        err = true
+    }
+
+    return err
+}
+
+is_in_hand :: proc(i_hand: int) -> bool {
+    return players[player_with_turn].hand[i_hand].hive_position == {-1, -1}
+}
+
+populate_places :: proc() -> (err: bool) {
+
+    init_placeable_pieces()
     pieces_i: int
 
     for x in 0..<HIVE_X_LENGTH {
@@ -336,42 +419,41 @@ get_place_pieces :: proc(i_hand: int) -> (pieces: [HAND_SIZE*PLAYERS]Piece, err:
                 if err {
                     continue
                 }
-                if hive[neighbor_position.x][neighbor_position.y] == .Empty {
+                if g_hive[neighbor_position.x][neighbor_position.y] == .Empty {
                     continue
                 }
                 player_i, _ := lookup_hive_position(neighbor_position)
                 if player_i == player_with_turn {
                     friendlies += 1
                 } else {
-                    assert(player_i != player_with_turn)
                     enemies += 1
                 }
             }
 
             if friendlies > 0 && enemies == 0 {
-                pieces[pieces_i].hive_position = position
+                placeable_pieces[pieces_i].hive_position = position
                 pieces_i += 1
             }
         }
     }
 
-    if get_occupied_positions() == 0 {
-        pieces[0].hive_position = get_start_position()
+    if get_occupied_positions(g_hive) == 0 {
+        placeable_pieces[0].hive_position = get_start_position()
     }
-    else if get_occupied_positions() == 1 {
+    else if get_occupied_positions(g_hive) == 1 {
         for direction in Direction {
             neighbor_position, err := get_neighbor_position(get_start_position(), direction)
             assert(!err)
-            pieces[pieces_i].hive_position = neighbor_position
+            placeable_pieces[pieces_i].hive_position = neighbor_position
             pieces_i += 1
         }
     }
 
-    if pieces[0].hive_position == {-1, -1} {
+    if placeable_pieces[0].hive_position == {-1, -1} {
         err = true
     }
 
-    return pieces, err
+    return err
 }
 
 within_bounds :: proc(bounds: Bounds, position: rl.Vector2) -> (within: bool) {
@@ -383,6 +465,23 @@ get_start_position :: proc() -> (start_position: [2]int) {
     start_position.x = HIVE_X_LENGTH / 2
     start_position.y = HIVE_Y_LENGTH / 2
     return start_position
+}
+
+can_play :: proc() -> bool {
+    play := false
+    for piece, i in players[player_with_turn].hand {
+        err: bool
+        if is_in_hand(i) {
+            err = populate_places()
+        } else {
+            err = populate_moves(i)
+        }
+        if !err {
+            play = true
+        }
+    }
+    init_placeable_pieces()
+    return play
 }
 
 advance_turn :: proc() {
@@ -411,19 +510,23 @@ place_piece :: proc(hive_position: [2]int, i_hand: int) {
     assert(0 <= i_hand          && i_hand          < HAND_SIZE)
     assert(0 <= hive_position.x && hive_position.x < HIVE_X_LENGTH)
     assert(0 <= hive_position.y && hive_position.y < HIVE_Y_LENGTH)
-    assert(hive[hive_position.x][hive_position.y] == .Empty)
-    assert(players[player_with_turn].hand[i_hand].hive_position == {-1, -1})
-    assert(validate_hive())
+    assert(g_hive[hive_position.x][hive_position.y] == .Empty)
+    assert(validate_hive(g_hive))
 
     bug := players[player_with_turn].hand[i_hand].bug
-    hive[hive_position.x][hive_position.y] = bug
+    g_hive[hive_position.x][hive_position.y] = bug
     players[player_with_turn].hand[i_hand].hive_position = hive_position
     fmt.printfln("Player <%d> placed <%s> at <%d %d>", player_with_turn, bug, hive_position.x, hive_position.y)
-    init_placeable_pieces()
     selection_i = -1
     advance_turn()
 
-    assert(validate_hive())
+    // Skip players that can't play. Infinite loop?
+    // for !can_play() {
+    //     advance_turn()
+    // }
+    init_placeable_pieces()
+
+    assert(validate_hive(g_hive))
 }
 
 update_bounds :: proc(bounds: ^Bounds, offset: rl.Vector2) {
@@ -492,7 +595,7 @@ draw_game :: proc() {
         offset.x = controller + (f32(y % 2) * HEXAGON_RADIUS * 1.5)
         // fmt.println(j, rotate, width, height)
         for x in 0..<HIVE_X_LENGTH {
-            if hive[x][y] == .Empty {
+            if g_hive[x][y] == .Empty {
                 if should_highlight({x, y}, offset) {
                     rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, 3, rl.BLUE)
                 } else {
