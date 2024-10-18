@@ -5,6 +5,7 @@ import "core:math"
 import "core:fmt"
 import "core:log"
 import "core:time"
+import "core:os"
 
 SCREEN_WIDTH  :: 900
 SCREEN_HEIGHT :: 940
@@ -25,6 +26,8 @@ HIVE_X_LENGTH    :: 7
 HIVE_Y_LENGTH      :: 20 
 g_hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
 g_placeable_pieces: [HAND_SIZE * PLAYERS]Piece
+
+g_game_file: os.Handle
 
 Bug_Colors := [Bug]rl.Color {
     .Empty       = rl.WHITE,
@@ -108,13 +111,20 @@ main :: proc() {
     FONT = rl.GetFontDefault()
     rl.SetTargetFPS(60)
 
-    // simulate_game()
+    create_game_file()
 
-    init_game()
-    for !rl.WindowShouldClose() { // Detect window close button or ESC key
-        update_game()
-        draw_game()
+    if len(os.args) == 1 {
+        init_game()
+        for !rl.WindowShouldClose() { // Detect window close button or ESC key
+            update_game()
+            draw_game()
+        }
+    } else {
+        assert(len(os.args) == 2)
+        assert(len(os.args) == 2)
+        playback_game(os.args[1])
     }
+    os.close(g_game_file)
 }
 
 get_neighbor :: proc(position: [2]int, direction: Direction) -> ([2]int, bool) {
@@ -132,47 +142,60 @@ get_neighbor :: proc(position: [2]int, direction: Direction) -> ([2]int, bool) {
     return neighbor, err
 }
 
-simulate_game :: proc() {
-    delay := 2000 * time.Millisecond
-    fmt.printfln("Simulation starting with a delay of %f ms between states...", time.duration_milliseconds(delay))
+// Creates a game file that can be played back later
+// 
+// Caller is responsible for calling close on g_game_file
+create_game_file :: proc() {
+    mode: int = 0
+	when ODIN_OS == .Linux || ODIN_OS == .Darwin {
+		mode = os.S_IRUSR | os.S_IWUSR | os.S_IRGRP | os.S_IROTH
+	}
+    now := time.now()
+    hms_buf: [time.MIN_HMS_LEN + 1]u8
+    hms := time.time_to_string_hms(now, hms_buf[:])
+    yyyy_mm_dd_buf: [time.MIN_YYYY_DATE_LEN + 1]u8
+    yyyy_mm_dd := time.to_string_yyyy_mm_dd(now, yyyy_mm_dd_buf[:])
+    game_filename := fmt.aprintf("game_%sT%s.txt", yyyy_mm_dd, hms)
+    fmt.printfln("Capuring game file <%s> for later playback", game_filename)
+	g_game_file, err := os.open(game_filename, (os.O_CREATE | os.O_TRUNC | os.O_RDWR), mode)
+    assert(err == os.ERROR_NONE)
+}
 
+playback_game :: proc(game_filename: string) {
     init_game()
 
-    state := 0
-    positions: [100][2]int
+    Turn :: struct {
+        selection: int,
+        target: [2]int,
+    }
+
+    // :TODO: Save and read in game log as turns
+    turn := 0
+    turns := [?]Turn{
+        {2, {3, 10}},
+        {2, {3, 11}},
+    }
     stopwatch: time.Stopwatch
     time.stopwatch_start(&stopwatch)
-    // TODO Save and read in game log
+    delay := 2000 * time.Millisecond
+    fmt.printfln("Playback starting with a delay of %.0f ms between states...", time.duration_milliseconds(delay))
 
-    for !rl.IsMouseButtonPressed(rl.MouseButton.RIGHT) {
-        if rl.WindowShouldClose() {
-            fmt.println("Closed during simulation")
-            break
-        }
-
+    for !rl.WindowShouldClose() {
         if time.stopwatch_duration(stopwatch) > delay {
-            err := false
-            switch state {
-            case 0:
-                positions[state] = get_start()
-                // TODO select bug and show where it can go
-                place_bug(positions[state], .Grasshopper)
-            case 1:
-                positions[state], err = get_neighbor(positions[0], .Northeast)
-                place_bug(positions[state], .Grasshopper)
-            case 2:
-                positions[state], err = get_neighbor(positions[0], .Southwest)
-                place_bug(positions[state], .Grasshopper)
+            if turn >= len(turns) {
+                break
             }
-            assert(!err)
-            state += 1
+            fmt.printfln("Playing back turn <%d>", turn)
+            g_selection = turns[turn].selection
+            place_piece(turns[turn].target)
+            turn += 1
             time.stopwatch_reset(&stopwatch)
             time.stopwatch_start(&stopwatch)
         }
         update_game()
         draw_game()
     }
-    fmt.println("Finished simulation.")
+    fmt.println("Finished playback.")
 }
 
 
@@ -251,7 +274,7 @@ update_game :: proc() {
         for piece in g_placeable_pieces {
             if within_bounds(piece.bounds, mouse) {
                 assert(g_selection != -1)
-                place_piece(piece.hive_position, g_selection)
+                place_piece(piece.hive_position)
             }
         }
     }
@@ -441,30 +464,16 @@ advance_turn :: proc() {
     assert(0 <= g_player_with_turn && g_player_with_turn < PLAYERS)
 }
 
-// Used for simulation
-place_bug :: proc(hive_position: [2]int, bug: Bug) {
-    i_hand := -1
-    for piece, i in g_players[g_player_with_turn].hand {
-        if piece.bug == bug && piece.hive_position == {-1, -1} {
-            i_hand = i
-            break
-        }
-    }
-    log.assertf(i_hand != -1, "Did not find a %s in player %d's hand", bug, g_player_with_turn)
-    place_piece(hive_position, i_hand)
-}
-
-// :TODO: Remove i_hand and use global g_selection
-place_piece :: proc(hive_position: [2]int, i_hand: int) {
-    assert(0 <= i_hand          && i_hand          < HAND_SIZE)
+place_piece :: proc(hive_position: [2]int) {
+    assert(0 <= g_selection     && g_selection     < HAND_SIZE)
     assert(0 <= hive_position.x && hive_position.x < HIVE_X_LENGTH)
     assert(0 <= hive_position.y && hive_position.y < HIVE_Y_LENGTH)
     assert(g_hive[hive_position.x][hive_position.y] == .Empty)
     assert(validate_hive(g_hive))
 
-    bug := g_players[g_player_with_turn].hand[i_hand].bug
+    bug := g_players[g_player_with_turn].hand[g_selection].bug
     g_hive[hive_position.x][hive_position.y] = bug
-    g_players[g_player_with_turn].hand[i_hand].hive_position = hive_position
+    g_players[g_player_with_turn].hand[g_selection].hive_position = hive_position
     fmt.printfln("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, bug, hive_position.x, hive_position.y)
     g_selection = -1
     advance_turn()
