@@ -17,10 +17,10 @@ SPACING_X :: 0
 SPACING_Y :: 5 
 
 draw_piece :: proc(offset: rl.Vector2, player_i: int, hand_i: int) {
-    bug := players[player_i].hand[hand_i].bug
+    bug := g_players[player_i].hand[hand_i].bug
     log.assert(bug != .Empty, "Shouldn't be drawing an empty bug")
 
-    rl.DrawPoly(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, players[player_i].color)
+    rl.DrawPoly(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, g_players[player_i].color)
     rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, 1, rl.BLACK)
 
     // Draw text inside piece
@@ -29,7 +29,7 @@ draw_piece :: proc(offset: rl.Vector2, player_i: int, hand_i: int) {
     text_offset: rl.Vector2 = {offset.x-(text_size.x/2), offset.y-(text_size.y/2)}
     rl.DrawTextEx(FONT, text, text_offset, FONT_SIZE, FONT_SPACING, Bug_Colors[bug])
 
-    update_bounds(&players[player_i].hand[hand_i].bounds, offset)
+    update_bounds(&g_players[player_i].hand[hand_i].bounds, offset)
 }
 
 draw_game :: proc() {
@@ -71,7 +71,7 @@ draw_game :: proc() {
     offset.y += HEXAGON_HEIGHT
 
     // Draw bugs in each player's hand
-    for player, i in players {
+    for player, i in g_players {
         offset.x = controller
         for piece, j in player.hand {
 

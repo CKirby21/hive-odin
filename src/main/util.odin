@@ -1,4 +1,4 @@
-// Functions should only be added to this file if they are small and pure
+// Functions should only be added to this file if they are small and have no side effects
 
 package main
 
@@ -51,5 +51,9 @@ get_start :: proc() -> (start: [2]int) {
     start.x = HIVE_X_LENGTH / 2
     start.y = HIVE_Y_LENGTH / 2
     return start
+}
+
+is_in_hand :: proc(i_hand: int) -> bool {
+    return g_players[g_player_with_turn].hand[i_hand].hive_position == {-1, -1}
 }
 

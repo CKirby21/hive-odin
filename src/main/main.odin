@@ -16,10 +16,10 @@ FONT_SPACING :: 1
 FONT: rl.Font
 
 PLAYERS :: 2
-players: [PLAYERS]Player
-player_with_turn: int // Index into the players array
+g_players: [PLAYERS]Player
+g_player_with_turn: int // Index into the g_players array
 HAND_SIZE :: 11
-selection_i: int // Index into the player with turn's hand
+g_selection: int // Index into the player with turn's hand
 
 HIVE_X_LENGTH    :: 7
 HIVE_Y_LENGTH      :: 20 
@@ -181,34 +181,34 @@ init_game :: proc() {
     fmt.println("Initializing state...")
 
     // Init Players
-    assert(len(players) == PLAYERS)
-    players = {}
+    assert(len(g_players) == PLAYERS)
+    g_players = {}
     for i in 0..<PLAYERS {
         bounds := Bounds{ rl.Vector2{-1,-1}, rl.Vector2{-1,-1} }
         bug := Bug.Empty
         hive_position := [2]int{-1,-1}
         piece := Piece{ bug, bounds, hive_position }
         for j in 0..<HAND_SIZE {
-            players[i].hand[j] = piece
+            g_players[i].hand[j] = piece
         }
-        players[i].hand[0].bug = .Queen
-        players[i].hand[1].bug = .Ant
-        players[i].hand[2].bug = .Ant
-        players[i].hand[3].bug = .Ant
-        players[i].hand[4].bug = .Grasshopper
-        players[i].hand[5].bug = .Grasshopper
-        players[i].hand[6].bug = .Grasshopper
-        players[i].hand[7].bug = .Spider
-        players[i].hand[8].bug = .Spider
-        players[i].hand[9].bug = .Beetle
-        players[i].hand[10].bug = .Beetle
+        g_players[i].hand[0].bug = .Queen
+        g_players[i].hand[1].bug = .Ant
+        g_players[i].hand[2].bug = .Ant
+        g_players[i].hand[3].bug = .Ant
+        g_players[i].hand[4].bug = .Grasshopper
+        g_players[i].hand[5].bug = .Grasshopper
+        g_players[i].hand[6].bug = .Grasshopper
+        g_players[i].hand[7].bug = .Spider
+        g_players[i].hand[8].bug = .Spider
+        g_players[i].hand[9].bug = .Beetle
+        g_players[i].hand[10].bug = .Beetle
     }
-    player_with_turn = 0
+    g_player_with_turn = 0
 
     // Assign player colors
-    assert(len(players) == 2)
-    players[0].color = rl.BEIGE
-    players[1].color = rl.BLACK
+    assert(len(g_players) == 2)
+    g_players[0].color = rl.BEIGE
+    g_players[1].color = rl.BLACK
 
     // Init Hive
     assert(len(g_hive) == HIVE_X_LENGTH)
@@ -220,7 +220,7 @@ init_game :: proc() {
     }
 
     init_placeable_pieces()
-    selection_i = -1
+    g_selection = -1
 
     fmt.println("Finished initializing state.")
 }
@@ -229,9 +229,9 @@ update_game :: proc() {
 
     if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
         mouse := rl.GetMousePosition()
-        for player, i in players {
+        for player, i in g_players {
             for piece, j in player.hand {
-                if within_bounds(piece.bounds, mouse) && i == player_with_turn {
+                if within_bounds(piece.bounds, mouse) && i == g_player_with_turn {
                     fmt.printf("Selected a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
                     
                     err: bool 
@@ -244,14 +244,14 @@ update_game :: proc() {
                         // :TODO: handle when there is nowhere to place/move
                         assert(false)
                     }
-                    selection_i = j
+                    g_selection = j
                 }
             }
         }
         for piece in placeable_pieces {
             if within_bounds(piece.bounds, mouse) {
-                assert(selection_i != -1)
-                place_piece(piece.hive_position, selection_i)
+                assert(g_selection != -1)
+                place_piece(piece.hive_position, g_selection)
             }
         }
     }
@@ -323,7 +323,7 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
     pieces_i: int
 
     // This is so that the current position does not contribute to the logic below
-    piece := players[player_with_turn].hand[i_hand]
+    piece := g_players[g_player_with_turn].hand[i_hand]
     hive := g_hive
     hive[piece.hive_position.x][piece.hive_position.y] = .Empty
 
@@ -363,10 +363,6 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
     return err
 }
 
-is_in_hand :: proc(i_hand: int) -> bool {
-    return players[player_with_turn].hand[i_hand].hive_position == {-1, -1}
-}
-
 populate_places :: proc() -> (err: bool) {
 
     init_placeable_pieces()
@@ -387,7 +383,7 @@ populate_places :: proc() -> (err: bool) {
                     continue
                 }
                 player_i, _ := lookup_hive_position(neighbor)
-                if player_i == player_with_turn {
+                if player_i == g_player_with_turn {
                     friendlies += 1
                 } else {
                     enemies += 1
@@ -422,7 +418,7 @@ populate_places :: proc() -> (err: bool) {
 
 can_play :: proc() -> bool {
     play := false
-    for piece, i in players[player_with_turn].hand {
+    for piece, i in g_players[g_player_with_turn].hand {
         err: bool
         if is_in_hand(i) {
             err = populate_places()
@@ -438,27 +434,27 @@ can_play :: proc() -> bool {
 }
 
 advance_turn :: proc() {
-    assert(0 <= player_with_turn && player_with_turn < PLAYERS)
-    player_with_turn += 1
-    player_with_turn %= PLAYERS // Wrap around
-    // fmt.printfln("Player <%d>'s turn", player_with_turn)
-    assert(0 <= player_with_turn && player_with_turn < PLAYERS)
+    assert(0 <= g_player_with_turn && g_player_with_turn < PLAYERS)
+    g_player_with_turn += 1
+    g_player_with_turn %= PLAYERS // Wrap around
+    // fmt.printfln("Player <%d>'s turn", g_player_with_turn)
+    assert(0 <= g_player_with_turn && g_player_with_turn < PLAYERS)
 }
 
 // Used for simulation
 place_bug :: proc(hive_position: [2]int, bug: Bug) {
     i_hand := -1
-    for piece, i in players[player_with_turn].hand {
+    for piece, i in g_players[g_player_with_turn].hand {
         if piece.bug == bug && piece.hive_position == {-1, -1} {
             i_hand = i
             break
         }
     }
-    log.assertf(i_hand != -1, "Did not find a %s in player %d's hand", bug, player_with_turn)
+    log.assertf(i_hand != -1, "Did not find a %s in player %d's hand", bug, g_player_with_turn)
     place_piece(hive_position, i_hand)
 }
 
-// :TODO: Remove i_hand and use global selection_i
+// :TODO: Remove i_hand and use global g_selection
 place_piece :: proc(hive_position: [2]int, i_hand: int) {
     assert(0 <= i_hand          && i_hand          < HAND_SIZE)
     assert(0 <= hive_position.x && hive_position.x < HIVE_X_LENGTH)
@@ -466,11 +462,11 @@ place_piece :: proc(hive_position: [2]int, i_hand: int) {
     assert(g_hive[hive_position.x][hive_position.y] == .Empty)
     assert(validate_hive(g_hive))
 
-    bug := players[player_with_turn].hand[i_hand].bug
+    bug := g_players[g_player_with_turn].hand[i_hand].bug
     g_hive[hive_position.x][hive_position.y] = bug
-    players[player_with_turn].hand[i_hand].hive_position = hive_position
-    fmt.printfln("Player <%d> placed <%s> at <%d %d>", player_with_turn, bug, hive_position.x, hive_position.y)
-    selection_i = -1
+    g_players[g_player_with_turn].hand[i_hand].hive_position = hive_position
+    fmt.printfln("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, bug, hive_position.x, hive_position.y)
+    g_selection = -1
     advance_turn()
 
     // Skip players that can't play. Infinite loop?
@@ -499,7 +495,7 @@ lookup_hive_position :: proc(hive_position: [2]int) -> (int, int) {
     i := -1
     for j in 0..<PLAYERS {
         for i in 0..<HAND_SIZE {
-            if players[j].hand[i].hive_position == hive_position {
+            if g_players[j].hand[i].hive_position == hive_position {
                 return j, i
             }
         }
