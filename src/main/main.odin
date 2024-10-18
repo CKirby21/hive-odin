@@ -420,17 +420,6 @@ populate_places :: proc() -> (err: bool) {
     return err
 }
 
-within_bounds :: proc(bounds: Bounds, position: rl.Vector2) -> (within: bool) {
-    return bounds.min.x <= position.x && position.x <= bounds.max.x && 
-           bounds.min.y <= position.y && position.y <= bounds.max.y
-}
-
-get_start :: proc() -> (start: [2]int) {
-    start.x = HIVE_X_LENGTH / 2
-    start.y = HIVE_Y_LENGTH / 2
-    return start
-}
-
 can_play :: proc() -> bool {
     play := false
     for piece, i in players[player_with_turn].hand {
@@ -491,11 +480,6 @@ place_piece :: proc(hive_position: [2]int, i_hand: int) {
     init_placeable_pieces()
 
     assert(validate_hive(g_hive))
-}
-
-update_bounds :: proc(bounds: ^Bounds, offset: rl.Vector2) {
-    bounds.min = {offset.x-HEXAGON_WIDTH_FRACTION, offset.y-HEXAGON_HEIGHT_FRACTION}
-    bounds.max = {offset.x+HEXAGON_WIDTH_FRACTION, offset.y+HEXAGON_HEIGHT_FRACTION}
 }
 
 should_highlight :: proc(hive_position: [2]int, offset: rl.Vector2) -> (highlight: bool) {
