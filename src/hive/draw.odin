@@ -1,4 +1,4 @@
-package main
+package hive
 
 import rl "vendor:raylib"
 import "core:fmt"

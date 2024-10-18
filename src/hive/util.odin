@@ -1,6 +1,6 @@
 // Functions should only be added to this file if they are small and have no side effects
 
-package main
+package hive
 
 import rl "vendor:raylib"
 import "core:fmt"

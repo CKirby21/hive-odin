@@ -1,4 +1,4 @@
-package main
+package hive
 
 import rl "vendor:raylib"
 import "core:math"
@@ -24,7 +24,7 @@ g_selection: int // Index into the player with turn's hand
 HIVE_X_LENGTH    :: 7
 HIVE_Y_LENGTH      :: 20 
 g_hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
-placeable_pieces: [HAND_SIZE * PLAYERS]Piece
+g_placeable_pieces: [HAND_SIZE * PLAYERS]Piece
 
 Bug_Colors := [Bug]rl.Color {
     .Empty       = rl.WHITE,
@@ -248,7 +248,7 @@ update_game :: proc() {
                 }
             }
         }
-        for piece in placeable_pieces {
+        for piece in g_placeable_pieces {
             if within_bounds(piece.bounds, mouse) {
                 assert(g_selection != -1)
                 place_piece(piece.hive_position, g_selection)
@@ -308,8 +308,8 @@ validate_hive :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (valid_hive: b
 }
 
 init_placeable_pieces :: proc() {
-    placeable_pieces = [HAND_SIZE * PLAYERS]Piece{}
-    for &piece in placeable_pieces {
+    g_placeable_pieces = [HAND_SIZE * PLAYERS]Piece{}
+    for &piece in g_placeable_pieces {
         piece.hive_position = {-1, -1}
     }
 }
@@ -350,13 +350,13 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
 
             // Add new piece
             if 0 < neighbors && neighbors <= 4 && position != piece.hive_position {
-                placeable_pieces[pieces_i].hive_position = position
+                g_placeable_pieces[pieces_i].hive_position = position
                 pieces_i += 1
             }
         }
     }
 
-    if placeable_pieces[0].hive_position == {-1, -1} {
+    if g_placeable_pieces[0].hive_position == {-1, -1} {
         err = true
     }
 
@@ -391,25 +391,25 @@ populate_places :: proc() -> (err: bool) {
             }
 
             if friendlies > 0 && enemies == 0 {
-                placeable_pieces[pieces_i].hive_position = position
+                g_placeable_pieces[pieces_i].hive_position = position
                 pieces_i += 1
             }
         }
     }
 
     if get_occupied_positions(g_hive) == 0 {
-        placeable_pieces[0].hive_position = get_start()
+        g_placeable_pieces[0].hive_position = get_start()
     }
     else if get_occupied_positions(g_hive) == 1 {
         for direction in Direction {
             neighbor, err := get_neighbor(get_start(), direction)
             assert(!err)
-            placeable_pieces[pieces_i].hive_position = neighbor
+            g_placeable_pieces[pieces_i].hive_position = neighbor
             pieces_i += 1
         }
     }
 
-    if placeable_pieces[0].hive_position == {-1, -1} {
+    if g_placeable_pieces[0].hive_position == {-1, -1} {
         err = true
     }
 
@@ -479,7 +479,7 @@ place_piece :: proc(hive_position: [2]int, i_hand: int) {
 }
 
 should_highlight :: proc(hive_position: [2]int, offset: rl.Vector2) -> (highlight: bool) {
-    for &piece in placeable_pieces {
+    for &piece in g_placeable_pieces {
         if piece.hive_position == hive_position {
             update_bounds(&piece.bounds, offset) // :FIX: Not sure if i like this here
             highlight = true
