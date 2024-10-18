@@ -3,6 +3,18 @@ package main
 import rl "vendor:raylib"
 import "core:fmt"
 import "core:log"
+import "core:math"
+
+HEXAGON_SIDES :: 6
+HEXAGON_RADIUS: f32 = 40.0
+HEXAGON_ANGLE: f32 = 2.0 * math.PI / HEXAGON_SIDES
+HEXAGON_WIDTH: f32 = HEXAGON_RADIUS * 2
+HEXAGON_HEIGHT: f32 = HEXAGON_RADIUS * math.SQRT_THREE
+HEXAGON_WIDTH_FRACTION: f32 = HEXAGON_WIDTH / 2.7
+HEXAGON_HEIGHT_FRACTION: f32 = HEXAGON_HEIGHT / 2
+
+SPACING_X :: 0
+SPACING_Y :: 5 
 
 draw_piece :: proc(offset: rl.Vector2, player_i: int, hand_i: int) {
     bug := players[player_i].hand[hand_i].bug
