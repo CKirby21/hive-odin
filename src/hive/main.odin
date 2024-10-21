@@ -6,6 +6,8 @@ import "core:fmt"
 import "core:log"
 import "core:time"
 import "core:os"
+import "core:slice"
+import sa "core:container/small_array"
 
 SCREEN_WIDTH  :: 900
 SCREEN_HEIGHT :: 940
@@ -25,7 +27,7 @@ g_selection: int // Index into the player with turn's hand
 HIVE_X_LENGTH    :: 7
 HIVE_Y_LENGTH      :: 20 
 g_hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
-g_placeable_pieces: [HAND_SIZE * PLAYERS]Piece
+g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
 
 g_game_file: os.Handle
 
@@ -104,7 +106,18 @@ Piece :: struct {
     hive_position: [2]int,
 }
 
+Logger_Opts :: log.Options{
+	.Level,
+	.Terminal_Color,
+	.Short_File_Path,
+	.Line,
+}
+
 main :: proc() {
+    logger := log.create_console_logger(log.Level.Debug, Logger_Opts)
+    context.logger = logger
+    defer log.destroy_console_logger(logger)
+
     rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Hive")
     defer rl.CloseWindow()   
     
@@ -156,7 +169,7 @@ create_game_file :: proc() {
     yyyy_mm_dd_buf: [time.MIN_YYYY_DATE_LEN + 1]u8
     yyyy_mm_dd := time.to_string_yyyy_mm_dd(now, yyyy_mm_dd_buf[:])
     game_filename := fmt.aprintf("game_%sT%s.txt", yyyy_mm_dd, hms)
-    fmt.printfln("Capuring game file <%s> for later playback", game_filename)
+    log.debugf("Capuring game file <%s> for later playback", game_filename)
 	g_game_file, err := os.open(game_filename, (os.O_CREATE | os.O_TRUNC | os.O_RDWR), mode)
     assert(err == os.ERROR_NONE)
 }
@@ -178,14 +191,14 @@ playback_game :: proc(game_filename: string) {
     stopwatch: time.Stopwatch
     time.stopwatch_start(&stopwatch)
     delay := 2000 * time.Millisecond
-    fmt.printfln("Playback starting with a delay of %.0f ms between states...", time.duration_milliseconds(delay))
+    log.debugf("Playback starting with a delay of %.0f ms between states...", time.duration_milliseconds(delay))
 
     for !rl.WindowShouldClose() {
         if time.stopwatch_duration(stopwatch) > delay {
             if turn >= len(turns) {
                 break
             }
-            fmt.printfln("Playing back turn <%d>", turn)
+            log.debug("Playing back turn <%d>", turn)
             g_selection = turns[turn].selection
             place_piece(turns[turn].target)
             turn += 1
@@ -195,13 +208,13 @@ playback_game :: proc(game_filename: string) {
         update_game()
         draw_game()
     }
-    fmt.println("Finished playback.")
+    log.debug("Finished playback.")
 }
 
 
 init_game :: proc() {
 
-    fmt.println("Initializing state...")
+    log.debug("Initializing state...")
 
     // Init Players
     assert(len(g_players) == PLAYERS)
@@ -242,10 +255,10 @@ init_game :: proc() {
         }
     }
 
-    init_placeable_pieces()
+    sa.clear(&g_placeables)
     g_selection = -1
 
-    fmt.println("Finished initializing state.")
+    log.debug("Finished initializing state.")
 }
 
 update_game :: proc() {
@@ -255,7 +268,7 @@ update_game :: proc() {
         for player, i in g_players {
             for piece, j in player.hand {
                 if within_bounds(piece.bounds, mouse) && i == g_player_with_turn {
-                    fmt.printf("Selected a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
+                    log.debugf("Selected a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
                     
                     err: bool 
                     if is_in_hand(j) {
@@ -271,7 +284,8 @@ update_game :: proc() {
                 }
             }
         }
-        for piece in g_placeable_pieces {
+        for i in 0..<sa.len(g_placeables) {
+            piece := sa.get(g_placeables, i)
             if within_bounds(piece.bounds, mouse) {
                 assert(g_selection != -1)
                 place_piece(piece.hive_position)
@@ -290,51 +304,42 @@ validate_hive :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (valid_hive: b
 
     occupied := get_occupied_positions(hive)
     if occupied <= 1 {
-        return valid_hive
+        return true
     }
-    neighbors: [HAND_SIZE * PLAYERS][2]int
-    for &position in neighbors {
-        position = {-1, -1}
-    }
+    neighbors: sa.Small_Array(HAND_SIZE * PLAYERS, [2]int)
 
+    out:
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
             if hive[x][y] != .Empty {
-                neighbors[0] = {x, y}
+                sa.append(&neighbors, [2]int{x, y})
+                break out
             }
         }
     }
 
     for i in 0..<occupied {
-        position := neighbors[i]
-        if position == {-1, -1} {
+        position, ok := sa.get_safe(neighbors, i)
+        if !ok {
             break
         }
         for direction in Direction {
             neighbor, err := get_neighbor(position, direction)
-            if err || hive[neighbor.x][neighbor.y] == .Empty{
+            if err || hive[neighbor.x][neighbor.y] == .Empty {
                 continue
             }
-            // fmt.println("Neighbor:", neighbor, err, direction, hive[neighbor.x][neighbor.y])
-            if !exists(neighbors, neighbor) {
-                index := get_len(neighbors)
-                neighbors[index] = neighbor
+            // log.debug("Neighbor:", neighbor, err, direction, hive[neighbor.x][neighbor.y])
+            if !slice.contains(sa.slice(&neighbors), neighbor) {
+                sa.append(&neighbors, neighbor)
             }
         }
     }
 
-    if get_len(neighbors) != occupied {
+    if sa.len(neighbors) != occupied {
         valid_hive = false
     }
 
     return valid_hive
-}
-
-init_placeable_pieces :: proc() {
-    g_placeable_pieces = [HAND_SIZE * PLAYERS]Piece{}
-    for &piece in g_placeable_pieces {
-        piece.hive_position = {-1, -1}
-    }
 }
 
 populate_moves :: proc(i_hand: int) -> (err: bool) {
@@ -342,8 +347,7 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
     log.assert(!is_in_hand(i_hand),
         "Function should only be called if piece is already placed in the hive")
 
-    init_placeable_pieces()
-    pieces_i: int
+    sa.clear(&g_placeables)
 
     // This is so that the current position does not contribute to the logic below
     piece := g_players[g_player_with_turn].hand[i_hand]
@@ -373,13 +377,14 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
 
             // Add new piece
             if 0 < neighbors && neighbors <= 4 && position != piece.hive_position {
-                g_placeable_pieces[pieces_i].hive_position = position
-                pieces_i += 1
+                placeable_piece := Piece{}
+                placeable_piece.hive_position = position
+                sa.append(&g_placeables, placeable_piece)
             }
         }
     }
 
-    if g_placeable_pieces[0].hive_position == {-1, -1} {
+    if sa.len(g_placeables) == 0 {
         err = true
     }
 
@@ -388,8 +393,24 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
 
 populate_places :: proc() -> (err: bool) {
 
-    init_placeable_pieces()
-    pieces_i: int
+    sa.clear(&g_placeables)
+
+    placeable_piece := Piece{}
+    occupied := get_occupied_positions(g_hive) 
+    if occupied == 0 {
+        placeable_piece.hive_position = get_start()
+        sa.append(&g_placeables, placeable_piece)
+        return false
+    }
+    else if occupied == 1 {
+        for direction in Direction {
+            neighbor, err := get_neighbor(get_start(), direction)
+            assert(!err)
+            placeable_piece.hive_position = neighbor
+            sa.append(&g_placeables, placeable_piece)
+        }
+        return false
+    }
 
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
@@ -414,25 +435,14 @@ populate_places :: proc() -> (err: bool) {
             }
 
             if friendlies > 0 && enemies == 0 {
-                g_placeable_pieces[pieces_i].hive_position = position
-                pieces_i += 1
+                placeable_piece.hive_position = position
+                sa.append(&g_placeables, placeable_piece)
             }
         }
     }
 
-    if get_occupied_positions(g_hive) == 0 {
-        g_placeable_pieces[0].hive_position = get_start()
-    }
-    else if get_occupied_positions(g_hive) == 1 {
-        for direction in Direction {
-            neighbor, err := get_neighbor(get_start(), direction)
-            assert(!err)
-            g_placeable_pieces[pieces_i].hive_position = neighbor
-            pieces_i += 1
-        }
-    }
 
-    if g_placeable_pieces[0].hive_position == {-1, -1} {
+    if sa.len(g_placeables) == 0 {
         err = true
     }
 
@@ -452,7 +462,6 @@ can_play :: proc() -> bool {
             play = true
         }
     }
-    init_placeable_pieces()
     return play
 }
 
@@ -474,23 +483,26 @@ place_piece :: proc(hive_position: [2]int) {
     bug := g_players[g_player_with_turn].hand[g_selection].bug
     g_hive[hive_position.x][hive_position.y] = bug
     g_players[g_player_with_turn].hand[g_selection].hive_position = hive_position
-    fmt.printfln("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, bug, hive_position.x, hive_position.y)
+    log.debugf("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, bug, hive_position.x, hive_position.y)
     g_selection = -1
+    sa.clear(&g_placeables)
+
     advance_turn()
 
-    // Skip players that can't play. Infinite loop?
+    // :TODO: Skip players that can't play. Infinite loop?
     // for !can_play() {
     //     advance_turn()
     // }
-    init_placeable_pieces()
 
     assert(validate_hive(g_hive))
 }
 
 should_highlight :: proc(hive_position: [2]int, offset: rl.Vector2) -> (highlight: bool) {
-    for &piece in g_placeable_pieces {
+    for i in 0..<sa.len(g_placeables) {
+        piece := sa.get(g_placeables, i)
         if piece.hive_position == hive_position {
             update_bounds(&piece.bounds, offset) // :FIX: Not sure if i like this here
+            sa.set(&g_placeables, i, piece)
             highlight = true
         }
     }
