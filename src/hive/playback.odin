@@ -5,23 +5,25 @@ import "core:fmt"
 import "core:log"
 import "core:time"
 import "core:os"
+import "core:strings"
+import "core:strconv"
 import sa "core:container/small_array"
 
-// Creates a game file that can be played back later
-// 
 // Caller is responsible for calling close on g_game_file
-create_game_file :: proc() {
+create_playback_file :: proc() -> os.Handle {
     mode: int = 0
 	when ODIN_OS == .Linux || ODIN_OS == .Darwin {
 		mode = os.S_IRUSR | os.S_IWUSR | os.S_IRGRP | os.S_IROTH
 	}
-    game_filename := fmt.aprintf("game_%s.txt", get_iso8601_timestamp())
-    log.debugf("Capuring game file <%s> for later playback", game_filename)
-    g_game_file, err := os.open(game_filename, (os.O_CREATE | os.O_TRUNC | os.O_RDWR), mode)
-    log.assertf(err == os.ERROR_NONE, "Failed to open <%s", game_filename)
+    playback_filename := fmt.aprintf("playback_%s.txt", get_iso8601_timestamp())
+    log.debugf("Capuring game file <%s> for later playback", playback_filename)
+    playback_file, err := os.open(playback_filename, (os.O_CREATE | os.O_TRUNC | os.O_RDWR), mode)
+    os.write_string(playback_file, fmt.aprintln("source", "target.x", "target.y"))
+    log.assertf(err == os.ERROR_NONE, "Failed to open <%s", playback_filename)
+    return playback_file
 }
 
-playback_game :: proc(game_filename: string) {
+playback_game :: proc(playback_filepath: string) {
     init_game()
 
     Turn :: struct {
@@ -29,15 +31,36 @@ playback_game :: proc(game_filename: string) {
         target: [2]int,
     }
 
-    // :TODO: Save and read in game log as turns
-    turn := 0
-    turns := [?]Turn{
-        {2, {3, 10}},
-        {2, {3, 11}},
+    data, ok := os.read_entire_file(playback_filepath, context.allocator)
+    defer delete(data)
+    assert(ok)
+
+    turns: [dynamic]Turn
+    defer delete(turns)
+
+    it := string(data)
+    log.debugf("Parsing playback file <%s>...", playback_filepath)
+    for line in strings.split_lines_iterator(&it) {
+        if line == "" { continue }
+        fields := strings.fields(line)
+        assert(len(fields) == 3)
+        if fields[0] == "source" {
+            assert(fields[1] == "target.x")
+            assert(fields[2] == "target.y")
+            continue
+        }
+        source := strconv.atoi(fields[0])
+        target := [2]int{
+            strconv.atoi(fields[1]),
+            strconv.atoi(fields[2]),
+        }
+        append(&turns, Turn { source, target })
     }
+
+    turn := 0
     stopwatch: time.Stopwatch
     time.stopwatch_start(&stopwatch)
-    delay := 2000 * time.Millisecond
+    delay := 1000 * time.Millisecond
     log.debugf("Playback starting with a delay of %.0f ms between states...", time.duration_milliseconds(delay))
 
     for !rl.WindowShouldClose() {

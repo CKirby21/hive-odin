@@ -29,7 +29,7 @@ HIVE_Y_LENGTH      :: 20
 g_hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
 g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
 
-g_game_file: os.Handle
+g_playback_file: os.Handle
 
 Even_Direction_Vectors := [Direction][2]int {
     // .None      = {  0,  0 },
@@ -115,7 +115,7 @@ main :: proc() {
     FONT = rl.GetFontDefault()
     rl.SetTargetFPS(60)
 
-    create_game_file()
+    g_playback_file = create_playback_file()
 
     if len(os.args) == 1 {
         init_game()
@@ -128,7 +128,7 @@ main :: proc() {
         assert(len(os.args) == 2)
         playback_game(os.args[1])
     }
-    os.close(g_game_file)
+    os.close(g_playback_file)
 }
 
 init_game :: proc() {
@@ -385,6 +385,8 @@ place_piece :: proc(target: [2]int) {
         source := g_players[g_player_with_turn].hand[g_source].hive_position
         g_hive[source.x][source.y] = .Empty
     }
+
+    os.write_string(g_playback_file, fmt.aprintln(g_source, target.x, target.y))
 
     bug := g_players[g_player_with_turn].hand[g_source].bug
     g_hive[target.x][target.y] = bug
