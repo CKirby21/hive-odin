@@ -22,7 +22,7 @@ PLAYERS :: 2
 g_players: [PLAYERS]Player
 g_player_with_turn: int // Index into the g_players array
 HAND_SIZE :: 11
-g_selection: int // Index into the player with turn's hand
+g_source: int // Index into the player with turn's hand
 
 HIVE_X_LENGTH    :: 7
 HIVE_Y_LENGTH      :: 20 
@@ -178,7 +178,7 @@ playback_game :: proc(game_filename: string) {
     init_game()
 
     Turn :: struct {
-        selection: int,
+        source: int,
         target: [2]int,
     }
 
@@ -199,7 +199,7 @@ playback_game :: proc(game_filename: string) {
                 break
             }
             log.debug("Playing back turn <%d>", turn)
-            g_selection = turns[turn].selection
+            g_source = turns[turn].source
             place_piece(turns[turn].target)
             turn += 1
             time.stopwatch_reset(&stopwatch)
@@ -256,7 +256,7 @@ init_game :: proc() {
     }
 
     sa.clear(&g_placeables)
-    g_selection = -1
+    g_source = -1
 
     log.debug("Finished initializing state.")
 }
@@ -280,14 +280,14 @@ update_game :: proc() {
                         // :TODO: handle when there is nowhere to place/move
                         assert(false)
                     }
-                    g_selection = j
+                    g_source = j
                 }
             }
         }
         for i in 0..<sa.len(g_placeables) {
             piece := sa.get(g_placeables, i)
             if within_bounds(piece.bounds, mouse) {
-                assert(g_selection != -1)
+                assert(g_source != -1)
                 place_piece(piece.hive_position)
             }
         }
@@ -474,17 +474,17 @@ advance_turn :: proc() {
 }
 
 place_piece :: proc(hive_position: [2]int) {
-    assert(0 <= g_selection     && g_selection     < HAND_SIZE)
+    assert(0 <= g_source     && g_source     < HAND_SIZE)
     assert(0 <= hive_position.x && hive_position.x < HIVE_X_LENGTH)
     assert(0 <= hive_position.y && hive_position.y < HIVE_Y_LENGTH)
     assert(g_hive[hive_position.x][hive_position.y] == .Empty)
     assert(validate_hive(g_hive))
 
-    bug := g_players[g_player_with_turn].hand[g_selection].bug
+    bug := g_players[g_player_with_turn].hand[g_source].bug
     g_hive[hive_position.x][hive_position.y] = bug
-    g_players[g_player_with_turn].hand[g_selection].hive_position = hive_position
+    g_players[g_player_with_turn].hand[g_source].hive_position = hive_position
     log.debugf("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, bug, hive_position.x, hive_position.y)
-    g_selection = -1
+    g_source = -1
     sa.clear(&g_placeables)
 
     advance_turn()
