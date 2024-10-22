@@ -1,4 +1,4 @@
-// Functions should only be added to this file if they are small and have no side effects
+// Functions should only be added to this file if they do not alter state
 
 package hive
 
@@ -7,6 +7,21 @@ import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:time"
+
+get_neighbor :: proc(position: [2]int, direction: Direction) -> ([2]int, bool) {
+
+    direction_vectors: [Direction][2]int
+    if position.y % 2 == 0 {
+        direction_vectors = Even_Direction_Vectors
+    } else {
+        direction_vectors = Odd_Direction_Vectors
+    }
+    vector := direction_vectors[direction]
+    neighbor := [2]int{position.x+vector.x, position.y+vector.y}
+    err := neighbor.x < 0 || HIVE_X_LENGTH <= neighbor.x || 
+          neighbor.y < 0 || HIVE_Y_LENGTH <= neighbor.y
+    return neighbor, err
+}
 
 get_iso8601_timestamp :: proc() -> string {
     now := time.now()
@@ -51,5 +66,37 @@ get_start :: proc() -> (start: [2]int) {
 
 is_in_hand :: proc(i_hand: int) -> bool {
     return g_players[g_player_with_turn].hand[i_hand].hive_position == {-1, -1}
+}
+
+lookup_hive_position :: proc(hive_position: [2]int) -> (int, int) {
+    assert_index(hive_position.x, HIVE_X_LENGTH)
+    assert_index(hive_position.y, HIVE_Y_LENGTH)
+
+    i := -1
+    for j in 0..<PLAYERS {
+        for i in 0..<HAND_SIZE {
+            if g_players[j].hand[i].hive_position == hive_position {
+                return j, i
+            }
+        }
+    }
+
+    panic("Hive position should have been found. Was the lookup array not populated?")
+}
+
+can_play :: proc() -> bool {
+    play := false
+    for piece, i in g_players[g_player_with_turn].hand {
+        err: bool
+        if is_in_hand(i) {
+            err = populate_places()
+        } else {
+            err = populate_moves(i)
+        }
+        if !err {
+            play = true
+        }
+    }
+    return play
 }
 

@@ -140,73 +140,6 @@ main :: proc() {
     os.close(g_game_file)
 }
 
-get_neighbor :: proc(position: [2]int, direction: Direction) -> ([2]int, bool) {
-
-    direction_vectors: [Direction][2]int
-    if position.y % 2 == 0 {
-        direction_vectors = Even_Direction_Vectors
-    } else {
-        direction_vectors = Odd_Direction_Vectors
-    }
-    vector := direction_vectors[direction]
-    neighbor := [2]int{position.x+vector.x, position.y+vector.y}
-    err := neighbor.x < 0 || HIVE_X_LENGTH <= neighbor.x || 
-          neighbor.y < 0 || HIVE_Y_LENGTH <= neighbor.y
-    return neighbor, err
-}
-
-// Creates a game file that can be played back later
-// 
-// Caller is responsible for calling close on g_game_file
-create_game_file :: proc() {
-    mode: int = 0
-	when ODIN_OS == .Linux || ODIN_OS == .Darwin {
-		mode = os.S_IRUSR | os.S_IWUSR | os.S_IRGRP | os.S_IROTH
-	}
-    game_filename := fmt.aprintf("game_%s.txt", get_iso8601_timestamp())
-    log.debugf("Capuring game file <%s> for later playback", game_filename)
-    g_game_file, err := os.open(game_filename, (os.O_CREATE | os.O_TRUNC | os.O_RDWR), mode)
-    assert(err == os.ERROR_NONE)
-}
-
-playback_game :: proc(game_filename: string) {
-    init_game()
-
-    Turn :: struct {
-        source: int,
-        target: [2]int,
-    }
-
-    // :TODO: Save and read in game log as turns
-    turn := 0
-    turns := [?]Turn{
-        {2, {3, 10}},
-        {2, {3, 11}},
-    }
-    stopwatch: time.Stopwatch
-    time.stopwatch_start(&stopwatch)
-    delay := 2000 * time.Millisecond
-    log.debugf("Playback starting with a delay of %.0f ms between states...", time.duration_milliseconds(delay))
-
-    for !rl.WindowShouldClose() {
-        if time.stopwatch_duration(stopwatch) > delay {
-            if turn >= len(turns) {
-                break
-            }
-            log.debug("Playing back turn <%d>", turn)
-            g_source = turns[turn].source
-            place_piece(turns[turn].target)
-            turn += 1
-            time.stopwatch_reset(&stopwatch)
-            time.stopwatch_start(&stopwatch)
-        }
-        update_game()
-        draw_game()
-    }
-    log.debug("Finished playback.")
-}
-
-
 init_game :: proc() {
 
     log.debug("Initializing state...")
@@ -444,22 +377,6 @@ populate_places :: proc() -> (err: bool) {
     return err
 }
 
-can_play :: proc() -> bool {
-    play := false
-    for piece, i in g_players[g_player_with_turn].hand {
-        err: bool
-        if is_in_hand(i) {
-            err = populate_places()
-        } else {
-            err = populate_moves(i)
-        }
-        if !err {
-            play = true
-        }
-    }
-    return play
-}
-
 advance_turn :: proc() {
     assert_index(g_player_with_turn, PLAYERS)
     g_player_with_turn += 1
@@ -502,21 +419,5 @@ should_highlight :: proc(hive_position: [2]int, offset: rl.Vector2) -> (highligh
         }
     }
     return highlight
-}
-
-lookup_hive_position :: proc(hive_position: [2]int) -> (int, int) {
-    assert_index(hive_position.x, HIVE_X_LENGTH)
-    assert_index(hive_position.y, HIVE_Y_LENGTH)
-
-    i := -1
-    for j in 0..<PLAYERS {
-        for i in 0..<HAND_SIZE {
-            if g_players[j].hand[i].hive_position == hive_position {
-                return j, i
-            }
-        }
-    }
-
-    panic("Hive position should have been found. Was the lookup array not populated?")
 }
 
