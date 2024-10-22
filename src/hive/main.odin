@@ -163,14 +163,9 @@ create_game_file :: proc() {
 	when ODIN_OS == .Linux || ODIN_OS == .Darwin {
 		mode = os.S_IRUSR | os.S_IWUSR | os.S_IRGRP | os.S_IROTH
 	}
-    now := time.now()
-    hms_buf: [time.MIN_HMS_LEN + 1]u8
-    hms := time.time_to_string_hms(now, hms_buf[:])
-    yyyy_mm_dd_buf: [time.MIN_YYYY_DATE_LEN + 1]u8
-    yyyy_mm_dd := time.to_string_yyyy_mm_dd(now, yyyy_mm_dd_buf[:])
-    game_filename := fmt.aprintf("game_%sT%s.txt", yyyy_mm_dd, hms)
+    game_filename := fmt.aprintf("game_%s.txt", get_iso8601_timestamp())
     log.debugf("Capuring game file <%s> for later playback", game_filename)
-	g_game_file, err := os.open(game_filename, (os.O_CREATE | os.O_TRUNC | os.O_RDWR), mode)
+    g_game_file, err := os.open(game_filename, (os.O_CREATE | os.O_TRUNC | os.O_RDWR), mode)
     assert(err == os.ERROR_NONE)
 }
 
@@ -287,7 +282,7 @@ update_game :: proc() {
         for i in 0..<sa.len(g_placeables) {
             piece := sa.get(g_placeables, i)
             if within_bounds(piece.bounds, mouse) {
-                assert(g_source != -1)
+                assert_index(g_source, HAND_SIZE)
                 place_piece(piece.hive_position)
             }
         }
@@ -466,17 +461,17 @@ can_play :: proc() -> bool {
 }
 
 advance_turn :: proc() {
-    assert(0 <= g_player_with_turn && g_player_with_turn < PLAYERS)
+    assert_index(g_player_with_turn, PLAYERS)
     g_player_with_turn += 1
     g_player_with_turn %= PLAYERS // Wrap around
     // fmt.printfln("Player <%d>'s turn", g_player_with_turn)
-    assert(0 <= g_player_with_turn && g_player_with_turn < PLAYERS)
+    assert_index(g_player_with_turn, PLAYERS)
 }
 
 place_piece :: proc(hive_position: [2]int) {
-    assert(0 <= g_source     && g_source     < HAND_SIZE)
-    assert(0 <= hive_position.x && hive_position.x < HIVE_X_LENGTH)
-    assert(0 <= hive_position.y && hive_position.y < HIVE_Y_LENGTH)
+    assert_index(g_source, HAND_SIZE)
+    assert_index(hive_position.x, HIVE_X_LENGTH)
+    assert_index(hive_position.y, HIVE_Y_LENGTH)
     assert(g_hive[hive_position.x][hive_position.y] == .Empty)
     assert(validate_hive(g_hive))
 
@@ -510,8 +505,8 @@ should_highlight :: proc(hive_position: [2]int, offset: rl.Vector2) -> (highligh
 }
 
 lookup_hive_position :: proc(hive_position: [2]int) -> (int, int) {
-    log.assert(hive_position.x >= 0)
-    log.assert(hive_position.y >= 0)
+    assert_index(hive_position.x, HIVE_X_LENGTH)
+    assert_index(hive_position.y, HIVE_Y_LENGTH)
 
     i := -1
     for j in 0..<PLAYERS {
