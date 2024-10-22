@@ -28,7 +28,6 @@ HIVE_X_LENGTH    :: 7
 HIVE_Y_LENGTH      :: 20 
 g_hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
 g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
-g_target: int // Index into the g_placeables array
 
 g_game_file: os.Handle
 
@@ -375,22 +374,22 @@ advance_turn :: proc() {
     assert_index(g_player_with_turn, PLAYERS)
 }
 
-place_piece :: proc(hive_position: [2]int) {
+place_piece :: proc(target: [2]int) {
     assert_index(g_source, HAND_SIZE)
-    assert_index(hive_position.x, HIVE_X_LENGTH)
-    assert_index(hive_position.y, HIVE_Y_LENGTH)
-    assert(g_hive[hive_position.x][hive_position.y] == .Empty)
+    assert_index(target.x, HIVE_X_LENGTH)
+    assert_index(target.y, HIVE_Y_LENGTH)
+    assert(g_hive[target.x][target.y] == .Empty)
     assert(validate_hive(g_hive))
 
     if !is_in_hand(g_source) {
-        hive_position_source := g_players[g_player_with_turn].hand[g_source].hive_position
-        g_hive[hive_position_source.x][hive_position_source.y] = .Empty
+        source := g_players[g_player_with_turn].hand[g_source].hive_position
+        g_hive[source.x][source.y] = .Empty
     }
 
     bug := g_players[g_player_with_turn].hand[g_source].bug
-    g_hive[hive_position.x][hive_position.y] = bug
-    g_players[g_player_with_turn].hand[g_source].hive_position = hive_position
-    log.debugf("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, bug, hive_position.x, hive_position.y)
+    g_hive[target.x][target.y] = bug
+    g_players[g_player_with_turn].hand[g_source].hive_position = target
+    log.debugf("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, bug, target.x, target.y)
     g_source = -1
     sa.clear(&g_placeables)
 
