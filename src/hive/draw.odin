@@ -16,6 +16,15 @@ HEXAGON_HEIGHT_FRACTION: f32 = HEXAGON_HEIGHT / 2
 SPACING_X :: 0
 SPACING_Y :: 5 
 
+Bug_Colors := [Bug]rl.Color {
+    .Empty       = rl.WHITE,
+    .Queen       = rl.YELLOW,
+    .Ant         = rl.DARKBLUE,
+    .Grasshopper = rl.LIME,
+    .Spider      = rl.RED,
+    .Beetle      = rl.BLUE,
+}
+
 draw_piece :: proc(offset: rl.Vector2, player_i: int, hand_i: int) {
     bug := g_players[player_i].hand[hand_i].bug
     log.assert(bug != .Empty, "Shouldn't be drawing an empty bug")

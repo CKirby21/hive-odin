@@ -28,17 +28,9 @@ HIVE_X_LENGTH    :: 7
 HIVE_Y_LENGTH      :: 20 
 g_hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
 g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
+g_target: int // Index into the g_placeables array
 
 g_game_file: os.Handle
-
-Bug_Colors := [Bug]rl.Color {
-    .Empty       = rl.WHITE,
-    .Queen       = rl.YELLOW,
-    .Ant         = rl.DARKBLUE,
-    .Grasshopper = rl.LIME,
-    .Spider      = rl.RED,
-    .Beetle      = rl.BLUE,
-}
 
 Even_Direction_Vectors := [Direction][2]int {
     // .None      = {  0,  0 },
@@ -204,11 +196,9 @@ update_game :: proc() {
                     } else {
                         err = populate_moves(j)
                     }
-                    if err {
-                        // :TODO: handle when there is nowhere to place/move
-                        assert(false)
+                    if !err {
+                        g_source = j
                     }
-                    g_source = j
                 }
             }
         }
@@ -391,6 +381,11 @@ place_piece :: proc(hive_position: [2]int) {
     assert_index(hive_position.y, HIVE_Y_LENGTH)
     assert(g_hive[hive_position.x][hive_position.y] == .Empty)
     assert(validate_hive(g_hive))
+
+    if !is_in_hand(g_source) {
+        hive_position_source := g_players[g_player_with_turn].hand[g_source].hive_position
+        g_hive[hive_position_source.x][hive_position_source.y] = .Empty
+    }
 
     bug := g_players[g_player_with_turn].hand[g_source].bug
     g_hive[hive_position.x][hive_position.y] = bug

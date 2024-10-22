@@ -65,12 +65,14 @@ get_start :: proc() -> (start: [2]int) {
 }
 
 is_in_hand :: proc(i_hand: int) -> bool {
+    assert_index(i_hand, HAND_SIZE)
     return g_players[g_player_with_turn].hand[i_hand].hive_position == {-1, -1}
 }
 
 lookup_hive_position :: proc(hive_position: [2]int) -> (int, int) {
     assert_index(hive_position.x, HIVE_X_LENGTH)
     assert_index(hive_position.y, HIVE_Y_LENGTH)
+    log.assert(g_hive[hive_position.x][hive_position.y] != .Empty)
 
     i := -1
     for j in 0..<PLAYERS {
@@ -81,7 +83,7 @@ lookup_hive_position :: proc(hive_position: [2]int) -> (int, int) {
         }
     }
 
-    panic("Hive position should have been found. Was the lookup array not populated?")
+    fmt.panicf("Hive position <%d %d> should have been found", hive_position.x, hive_position.y)
 }
 
 can_play :: proc() -> bool {
