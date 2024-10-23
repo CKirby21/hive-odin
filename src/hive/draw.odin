@@ -53,6 +53,18 @@ draw_game :: proc() {
         SCREEN_PADDING_Y,
     }
 
+    #partial switch get_game_outcome(g_hive) {
+    case .Tie:
+        log.debug("There be a tie")
+    case .Win:
+        for winner, i in get_winners(g_hive) {
+            if winner {
+                log.debugf("Player <%d> has won!", i)
+                break
+            }
+        }
+    }
+
     controller := offset.x
 
     // Draw da hive

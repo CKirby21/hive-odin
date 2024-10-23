@@ -7,8 +7,16 @@ import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:time"
+import "core:slice"
 
-get_neighbor :: proc(position: [2]int, direction: Direction) -> ([2]int, bool) {
+GameOutcome :: enum {
+    Undecided,
+    Tie,
+    Elimination,
+    Win
+}
+
+get_neighbor :: proc(position: [2]int, direction: Direction) -> (neighbor: [2]int, err: bool) {
 
     direction_vectors: [Direction][2]int
     if position.y % 2 == 0 {
@@ -17,8 +25,8 @@ get_neighbor :: proc(position: [2]int, direction: Direction) -> ([2]int, bool) {
         direction_vectors = Odd_Direction_Vectors
     }
     vector := direction_vectors[direction]
-    neighbor := [2]int{position.x+vector.x, position.y+vector.y}
-    err := neighbor.x < 0 || HIVE_X_LENGTH <= neighbor.x || 
+    neighbor = [2]int{position.x+vector.x, position.y+vector.y}
+    err = neighbor.x < 0 || HIVE_X_LENGTH <= neighbor.x || 
           neighbor.y < 0 || HIVE_Y_LENGTH <= neighbor.y
     return neighbor, err
 }
@@ -69,7 +77,7 @@ is_in_hand :: proc(i_hand: int) -> bool {
     return g_players[g_player_with_turn].hand[i_hand].hive_position == {-1, -1}
 }
 
-lookup_hive_position :: proc(hive_position: [2]int) -> (int, int) {
+lookup_hive_position :: proc(hive_position: [2]int) -> (player_i: int, hand_i: int) {
     assert_index(hive_position.x, HIVE_X_LENGTH)
     assert_index(hive_position.y, HIVE_Y_LENGTH)
     log.assert(g_hive[hive_position.x][hive_position.y] != .Empty)
@@ -100,5 +108,52 @@ can_play :: proc() -> bool {
         }
     }
     return play
+}
+
+get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (losers: [PLAYERS]bool) {
+
+    for x in 0..<HIVE_X_LENGTH {
+        for y in 0..<HIVE_Y_LENGTH {
+            if hive[x][y] != .Queen {
+                continue
+            }
+            queen_surrounded := true
+            for direction in Direction {
+                neighbor, err := get_neighbor({x, y}, direction)
+                if err || hive[neighbor.x][neighbor.y] == .Empty {
+                    queen_surrounded = false
+                }
+            }
+            if queen_surrounded {
+                player_i, _ := lookup_hive_position({x, y})
+                losers[player_i] = true
+            }
+        }
+    }
+    return losers
+}
+
+get_winners :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (winners: [PLAYERS]bool) {
+    losers := get_losers(hive)
+    for i in 0..<PLAYERS {
+        winners[i] = !losers[i]
+    }
+    return winners
+}
+
+get_game_outcome :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (game_outcome: GameOutcome) {
+    winners := get_winners(hive)
+    winner_count := slice.count(winners[:], true)
+    switch winner_count {
+    case PLAYERS:
+        game_outcome = .Undecided
+    case 1:
+        game_outcome = .Win
+    case 0:
+        game_outcome = .Tie
+    case:
+        game_outcome = .Elimination
+    }
+    return game_outcome
 }
 

@@ -20,6 +20,7 @@ FONT: rl.Font
 
 PLAYERS :: 2
 g_players: [PLAYERS]Player
+g_eliminations: [PLAYERS]bool
 g_player_with_turn: int // Index into the g_players array
 HAND_SIZE :: 11
 g_source: int // Index into the player with turn's hand
@@ -181,6 +182,14 @@ init_game :: proc() {
 }
 
 update_game :: proc() {
+    switch get_game_outcome(g_hive) {
+    case .Undecided:
+        // Do nothing
+    case .Elimination:
+        g_eliminations = get_losers(g_hive)
+    case .Tie, .Win:
+        return
+    }
 
     if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
         mouse := rl.GetMousePosition()
@@ -368,8 +377,15 @@ populate_places :: proc() -> (err: bool) {
 
 advance_turn :: proc() {
     assert_index(g_player_with_turn, PLAYERS)
-    g_player_with_turn += 1
-    g_player_with_turn %= PLAYERS // Wrap around
+
+    for _ in 0..<PLAYERS {
+        g_player_with_turn += 1
+        g_player_with_turn %= PLAYERS // Wrap around
+        if g_eliminations[g_player_with_turn] == false {
+            break
+        }
+    }
+    log.assert(g_eliminations[g_player_with_turn] == false, "At least one player should not eliminated")
     // fmt.printfln("Player <%d>'s turn", g_player_with_turn)
     assert_index(g_player_with_turn, PLAYERS)
 }
