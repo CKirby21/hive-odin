@@ -9,15 +9,6 @@ import "core:os"
 import "core:slice"
 import sa "core:container/small_array"
 
-SCREEN_WIDTH  :: 900
-SCREEN_HEIGHT :: 940
-SCREEN_PADDING_X :: 50
-SCREEN_PADDING_Y :: 50
-
-FONT_SIZE :: 12
-FONT_SPACING :: 1
-FONT: rl.Font
-
 PLAYERS :: 2
 g_players: [PLAYERS]Player
 g_eliminations: [PLAYERS]bool
@@ -25,7 +16,7 @@ g_player_with_turn: int // Index into the g_players array
 HAND_SIZE :: 11
 g_source: int // Index into the player with turn's hand
 
-HIVE_X_LENGTH    :: 7
+HIVE_X_LENGTH    :: 8
 HIVE_Y_LENGTH      :: 20 
 g_hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
 g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
@@ -110,7 +101,7 @@ main :: proc() {
     context.logger = logger
     defer log.destroy_console_logger(logger)
 
-    rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Hive")
+    rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "")
     defer rl.CloseWindow()   
     
     FONT = rl.GetFontDefault()

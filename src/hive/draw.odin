@@ -13,8 +13,20 @@ HEXAGON_HEIGHT: f32 = HEXAGON_RADIUS * math.SQRT_THREE
 HEXAGON_WIDTH_FRACTION: f32 = HEXAGON_WIDTH / 2.7
 HEXAGON_HEIGHT_FRACTION: f32 = HEXAGON_HEIGHT / 2
 
+SCREEN_WIDTH  :: 1000
+SCREEN_HEIGHT :: 1000
+SCREEN_PADDING_X :: 10
+SCREEN_PADDING_Y :: 10
+
+FONT_SIZE :: 12
+HEADER_FONT_SIZE :: 24
+FONT_SPACING :: 1
+FONT: rl.Font
+
 SPACING_X :: 0
 SPACING_Y :: 5 
+
+DRAW_GRID :: false
 
 Bug_Colors := [Bug]rl.Color {
     .Empty       = rl.WHITE,
@@ -53,18 +65,25 @@ draw_game :: proc() {
         SCREEN_PADDING_Y,
     }
 
+    text := rl.TextFormat("Player %i's turn.", g_player_with_turn)
     #partial switch get_game_outcome(g_hive) {
     case .Tie:
-        log.debug("There be a tie")
+        text = rl.TextFormat("There be a tie.")
     case .Win:
         for winner, i in get_winners(g_hive) {
             if winner {
-                log.debugf("Player <%d> has won!", i)
+                text = rl.TextFormat("Player %i has won!", i)
                 break
             }
         }
     }
+    text_size := rl.MeasureTextEx(FONT, text, HEADER_FONT_SIZE, FONT_SPACING)
+    text_offset: rl.Vector2 = { (SCREEN_WIDTH/2)-(text_size.x/2), offset.y }
+    rl.DrawTextEx(FONT, text, text_offset, HEADER_FONT_SIZE, FONT_SPACING, rl.BLACK)
+    offset.y += text_size.y + SPACING_Y
 
+    // Because offset is the center point of the next hexagon
+    offset = { offset.x + (HEXAGON_WIDTH/2), offset.y + (HEXAGON_HEIGHT/2) }
     controller := offset.x
 
     // Draw da hive
@@ -73,12 +92,13 @@ draw_game :: proc() {
         // fmt.println(j, rotate, width, height)
         for x in 0..<HIVE_X_LENGTH {
             if g_hive[x][y] == .Empty {
+                if DRAW_GRID {
+                    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, 1, rl.GRAY)
+                    rl.DrawTextEx(FONT, rl.TextFormat("%i %i", x, y), offset, FONT_SIZE, 2, rl.GRAY)
+                }
                 if should_highlight({x, y}, offset) {
                     rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, 3, rl.BLUE)
-                } else {
-                    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, 1, rl.GRAY)
                 }
-                rl.DrawTextEx(FONT, rl.TextFormat("%i %i", x, y), offset, FONT_SIZE, 2, rl.GRAY)
             }
             else {
                 player_i, hand_i := lookup_hive_position({x, y})
@@ -89,9 +109,11 @@ draw_game :: proc() {
 
         offset.y += HEXAGON_HEIGHT / 2
     }
-    offset.y += HEXAGON_HEIGHT
+    offset.y += (HEXAGON_HEIGHT/2) +SPACING_Y
 
     // Draw bugs in each player's hand
+    offset = { (SCREEN_WIDTH/2)-(HEXAGON_WIDTH*HAND_SIZE/2)+(HEXAGON_WIDTH/2), offset.y }
+    controller = offset.x
     for player, i in g_players {
         offset.x = controller
         for piece, j in player.hand {
