@@ -194,3 +194,7 @@ report_assertion_failure :: proc(prefix, message: string, loc := #caller_locatio
     runtime.trap()
 }
 
+is_even :: proc(num: int) -> bool {
+    return num % 2 == 0
+}
+

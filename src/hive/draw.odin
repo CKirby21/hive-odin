@@ -6,6 +6,7 @@ import "core:log"
 import "core:math"
 
 HEXAGON_SIDES :: 6
+HEXAGON_GAP :: 2
 g_zoom: f32 = 1.0
 
 SCREEN_WIDTH  :: 1000
@@ -24,7 +25,7 @@ FONT: rl.Font
 SPACING_X :: 0
 SPACING_Y :: 5 
 
-DRAW_GRID :: true
+DRAW_GRID :: false
 
 Hexagon :: struct {
     radius: f32,
@@ -50,7 +51,7 @@ draw_piece :: proc(offset: rl.Vector2, player_i: int, hand_i: int, hexagon: Hexa
     log.assert(bug != .Empty, "Shouldn't be drawing an empty bug")
 
     rl.DrawPoly(offset, HEXAGON_SIDES, hexagon.radius, 0, g_players[player_i].color)
-    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 1, rl.BLACK)
+    // rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 1, rl.BLACK)
 
     // Draw text inside piece
     text := rl.TextFormat("%s", bug)
@@ -98,17 +99,20 @@ draw_game :: proc() {
 
     hive_length := [2]int{HIVE_X_LENGTH, HIVE_Y_LENGTH}
     measurer: rl.Vector2
-    for i in 0..<HIVE_Y_LENGTH {
-        measurer.y += hexagon.height / 2
-        if measurer.y > HIVE_HEIGHT {
-            hive_length.y = i
+    for i in 0..<HIVE_X_LENGTH {
+        measurer.x += hexagon.radius * 3 + (2*HEXAGON_GAP)
+        if measurer.x > HIVE_WIDTH {
+            hive_length.x = i
             break
         }
     }
-    for i in 0..<HIVE_X_LENGTH {
-        measurer.x += hexagon.radius * 3
-        if measurer.x > HIVE_WIDTH {
-            hive_length.x = i
+    for i in 0..<HIVE_Y_LENGTH {
+        measurer.y += hexagon.height / 2
+        if !is_even(i) {
+            measurer.y += HEXAGON_GAP
+        }
+        if measurer.y > HIVE_HEIGHT {
+            hive_length.y = i
             break
         }
     }
@@ -123,6 +127,9 @@ draw_game :: proc() {
     // Draw da hive
     for y in hive_bounds.min.y..<hive_bounds.max.y {
         offset.x = controller + (f32(y % 2) * hexagon.radius * 1.5)
+        if !is_even(y) {
+            offset.x += HEXAGON_GAP
+        }
         // fmt.println(j, rotate, width, height)
         for x in hive_bounds.min.x..<hive_bounds.max.x {
             if is_empty({x, y}) {
@@ -139,10 +146,13 @@ draw_game :: proc() {
             if should_highlight({x, y}, offset) {
                 rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 3, rl.BLUE)
             }
-            offset.x += 3 * hexagon.radius
+            offset.x += 3 * hexagon.radius + (2*HEXAGON_GAP)
         }
 
         offset.y += hexagon.height / 2
+        if !is_even(y) {
+            offset.y += HEXAGON_GAP
+        }
     }
 
     // Draw bugs in each player's hand
