@@ -62,6 +62,11 @@ Opposite_Directions := [Direction]Direction {
     .Northwest = .Southeast,
 }
 
+Slide :: struct {
+    position: [2]int,
+    direction: Direction
+}
+
 Bounds :: struct {
     min: rl.Vector2,
     max: rl.Vector2,
@@ -267,6 +272,58 @@ validate_hive :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (valid_hive: b
     return valid_hive
 }
 
+slide :: proc(curr: ^Slide, hive := g_hive, curr_start := false) {
+
+    for direction in Direction {
+        // We want to skip this check if current is the start
+        if !curr_start {
+            explored_direction := Opposite_Directions[curr.direction]
+            // We don't want to go back the way we came
+            if direction == explored_direction {
+                continue
+            }
+        }
+        neighbor := get_neighbor(curr.position, direction)
+        if get_bug(neighbor, hive) != .Empty {
+            continue
+        }
+        // Investigate neighbor's neighbors
+        neighbor_count := 0
+        empties: [Direction]bool
+        for neighbor_direction in Direction {
+            neighbor_neighbor := get_neighbor(neighbor, neighbor_direction)
+            if get_bug(neighbor_neighbor, hive) == .Empty {
+                empties[neighbor_direction] = true
+            } else {
+                neighbor_count += 1
+            }
+        }
+        opposite := Opposite_Directions[direction]
+        left := Adjacent_Directions[opposite][0] 
+        right := Adjacent_Directions[opposite][1] 
+        can_slide := empties[left] || empties[right]
+        if neighbor_count > 0 && can_slide {
+            curr^ = Slide{ neighbor, direction }
+            return
+        }
+    }
+}
+
+get_slides :: proc(position: [2]int, hive := g_hive) -> 
+    (slides: sa.Small_Array(HAND_SIZE*PLAYERS*6, Slide)) {
+
+    curr := Slide{}
+    curr.position = position
+    slide(&curr, hive, true)
+
+    for curr.position != position {
+        ok := sa.append(&slides, curr)
+        assert(ok)
+        slide(&curr, hive)
+    }
+    return slides
+}
+
 populate_moves :: proc(i_hand: int) -> (err: bool) {
 
     log.assert(!is_in_hand(i_hand),
@@ -285,34 +342,21 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
         return err
     }
 
+    slides := get_slides(piece.hive_position, hive)
+    placeable_piece := Piece{}
+
     #partial switch piece.bug {
     case .Empty:
         panic("Should never be populating moves for an empty bug")
     case .Queen:
-        for direction in Direction {
-            neighbor := get_neighbor(piece.hive_position, direction)
-            if get_bug(neighbor, hive) != .Empty {
-                continue
-            }
-            // Investigate neighbor's neighbors
-            neighbor_count := 0
-            empties: [Direction]bool
-            for neighbor_direction in Direction {
-                neighbor_neighbor := get_neighbor(neighbor, neighbor_direction)
-                if get_bug(neighbor_neighbor, hive) == .Empty {
-                    empties[neighbor_direction] = true
-                } else {
-                    neighbor_count += 1
-                }
-            }
-            opposite := Opposite_Directions[direction]
-            left := Adjacent_Directions[opposite][0] 
-            right := Adjacent_Directions[opposite][1] 
-            if neighbor_count > 0 && (empties[left] || empties[right]) {
-                placeable_piece := Piece{}
-                placeable_piece.hive_position = neighbor
-                sa.append(&g_placeables, placeable_piece)
-            }
+        placeable_piece.hive_position = sa.get(slides, 0).position
+        sa.append(&g_placeables, placeable_piece)
+        placeable_piece.hive_position = sa.get(slides, sa.len(slides)-1).position
+        sa.append(&g_placeables, placeable_piece)
+    case .Ant:
+        for i in 0..<sa.len(slides) {
+            placeable_piece.hive_position = sa.get(slides, i).position
+            sa.append(&g_placeables, placeable_piece)
         }
     }
 
