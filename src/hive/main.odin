@@ -13,8 +13,13 @@ PLAYERS :: 2
 g_players: [PLAYERS]Player
 g_eliminations: [PLAYERS]bool
 g_player_with_turn: int // Index into the g_players array
-HAND_SIZE :: 11
 g_source: int // Index into the player with turn's hand
+QUEENS       :: 1
+ANTS         :: 3
+GRASSHOPPERS :: 3
+SPIDERS      :: 2
+BEETLES      :: 2
+HAND_SIZE :: QUEENS+ANTS+GRASSHOPPERS+SPIDERS+BEETLES
 
 HIVE_X_LENGTH    :: 8
 HIVE_Y_LENGTH      :: 20 
@@ -145,23 +150,16 @@ init_game :: proc() {
     g_players = {}
     for i in 0..<PLAYERS {
         bounds := Bounds{ rl.Vector2{-1,-1}, rl.Vector2{-1,-1} }
-        bug := Bug.Empty
         hive_position := [2]int{-1,-1}
-        piece := Piece{ bug, bounds, hive_position }
+        piece := Piece{ .Empty, bounds, hive_position }
         for j in 0..<HAND_SIZE {
             g_players[i].hand[j] = piece
         }
-        g_players[i].hand[0].bug = .Queen
-        g_players[i].hand[1].bug = .Ant
-        g_players[i].hand[2].bug = .Ant
-        g_players[i].hand[3].bug = .Ant
-        g_players[i].hand[4].bug = .Grasshopper
-        g_players[i].hand[5].bug = .Grasshopper
-        g_players[i].hand[6].bug = .Grasshopper
-        g_players[i].hand[7].bug = .Spider
-        g_players[i].hand[8].bug = .Spider
-        g_players[i].hand[9].bug = .Beetle
-        g_players[i].hand[10].bug = .Beetle
+        set_hand_bugs(&g_players[i].hand, .Queen, QUEENS)
+        set_hand_bugs(&g_players[i].hand, .Ant, ANTS)
+        set_hand_bugs(&g_players[i].hand, .Grasshopper, GRASSHOPPERS)
+        set_hand_bugs(&g_players[i].hand, .Spider, SPIDERS)
+        set_hand_bugs(&g_players[i].hand, .Beetle, BEETLES)
     }
     g_player_with_turn = 0
 

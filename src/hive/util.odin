@@ -171,17 +171,14 @@ get_game_outcome :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (game_outco
     return game_outcome
 }
 
-// can_slide :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug, direction: Direction) -> 
-//     (game_outcome: GameOutcome) {
-//
-//     neighbor_occupied_directions: [Direction]bool
-//     for neighbor_direction in Direction {
-//         neighbor_neighbor, err := get_neighbor(neighbor, neighbor_direction)
-//         if err {
-//             continue
-//         }
-//         if hive[neighbor_neighbor.x][neighbor_neighbor.y] != .Empty {
-//             continue
-//         }
-//     }
-// }
+set_hand_bugs :: proc(hand: ^[HAND_SIZE]Piece, bug: Bug, bug_count: int) {
+    for i in 0..<HAND_SIZE {
+        if hand[i].bug == .Empty {
+            for j in 0..<bug_count {
+                hand[i+j].bug = bug
+            }
+            return
+        }
+    }
+}
+
