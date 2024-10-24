@@ -324,6 +324,16 @@ get_slides :: proc(position: [2]int, hive := g_hive) ->
     return slides
 }
 
+populate_distinct_slides :: proc(position: [2]int, hive := g_hive, slide_count: int) {
+    slides := get_slides(position, hive)
+    assert_index(slide_count, sa.len(slides) - 1)
+    left := Piece{.Empty, Bounds{}, sa.get(slides, slide_count-1).position }
+    sa.append(&g_placeables, left)
+    right := Piece{.Empty, Bounds{}, sa.get(slides, sa.len(slides)-slide_count).position }
+    sa.append(&g_placeables, right)
+}
+
+
 populate_moves :: proc(i_hand: int) -> (err: bool) {
 
     log.assert(!is_in_hand(i_hand),
@@ -342,22 +352,24 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
         return err
     }
 
-    slides := get_slides(piece.hive_position, hive)
-    placeable_piece := Piece{}
 
-    #partial switch piece.bug {
+    switch piece.bug {
     case .Empty:
         panic("Should never be populating moves for an empty bug")
     case .Queen:
-        placeable_piece.hive_position = sa.get(slides, 0).position
-        sa.append(&g_placeables, placeable_piece)
-        placeable_piece.hive_position = sa.get(slides, sa.len(slides)-1).position
-        sa.append(&g_placeables, placeable_piece)
+        populate_distinct_slides(piece.hive_position, hive, 1)
     case .Ant:
+        slides := get_slides(piece.hive_position, hive)
         for i in 0..<sa.len(slides) {
-            placeable_piece.hive_position = sa.get(slides, i).position
+            placeable_piece := Piece{.Empty, Bounds{}, sa.get(slides, i).position}
             sa.append(&g_placeables, placeable_piece)
         }
+    case .Grasshopper:
+        // :TODO:
+    case .Spider:
+        populate_distinct_slides(piece.hive_position, hive, 3)
+    case .Beetle:
+        populate_distinct_slides(piece.hive_position, hive, 1)
     }
 
     if sa.len(g_placeables) == 0 {
