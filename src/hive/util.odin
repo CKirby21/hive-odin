@@ -72,7 +72,7 @@ update_bounds :: proc(bounds: ^Bounds, offset: rl.Vector2) {
 }
 
 assert_index :: proc(index: int, max: int) {
-    log.assertf(0 <= index && index <= max, "0 <= %d <= %d", index, max)
+    log.assertf(0 <= index && index < max, "0 <= %d < %d", index, max)
 }
 
 within_bounds :: proc(bounds: Bounds, position: rl.Vector2) -> (within: bool) {
