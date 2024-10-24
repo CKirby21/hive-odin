@@ -33,15 +33,26 @@ get_neighbor :: proc(position: [2]int, direction: Direction) -> (neighbor: [2]in
     return neighbor, err
 }
 
-get_top_bug :: proc(position: [2]int, hive := g_hive) -> (Bug, bool) {
+get_top_piece :: proc(position: [2]int, hive := g_hive) -> (Piece, bool) {
     stack := hive[position.x][position.y]
-    top_bug, ok := sa.get_safe(stack, sa.len(stack) - 1)
+    top_piece, ok := sa.get_safe(stack, sa.len(stack) - 1)
     empty := !ok
-    return top_bug, empty
+    return top_piece, empty
+}
+
+is_on_top :: proc(piece: Piece, hive := g_hive) -> bool {
+    top_piece, empty := get_top_piece(piece.hive_position, hive)
+    assert(!empty)
+    return top_piece.player_i == piece.player_i && top_piece.hand_i == piece.hand_i
+}
+
+get_stack_level :: proc(position: [2]int, hive := g_hive) -> (stack_level: int) {
+    stack := hive[position.x][position.y]
+    return sa.len(stack)
 }
 
 is_empty :: proc(position: [2]int, hive := g_hive) -> bool {
-    _, empty := get_top_bug(position, hive)
+    _, empty := get_top_piece(position, hive)
     return empty
 }
 
@@ -88,23 +99,6 @@ is_in_hand :: proc(i_hand: int) -> bool {
     return g_players[g_player_with_turn].hand[i_hand].hive_position == {-1, -1}
 }
 
-lookup_hive_position :: proc(hive_position: [2]int) -> (player_i: int, hand_i: int) {
-    log.assertf(0 <= hive_position.x && hive_position.x < HIVE_X_LENGTH, "%d", hive_position.x)
-    log.assertf(0 <= hive_position.y && hive_position.y < HIVE_Y_LENGTH, "%d", hive_position.y)
-    log.assert(!is_empty(hive_position))
-
-    i := -1
-    for j in 0..<PLAYERS {
-        for i in 0..<HAND_SIZE {
-            if g_players[j].hand[i].hive_position == hive_position {
-                return j, i
-            }
-        }
-    }
-
-    fmt.panicf("Hive position <%d %d> should have been found", hive_position.x, hive_position.y)
-}
-
 can_play :: proc() -> bool {
     play := false
     for piece, i in g_players[g_player_with_turn].hand {
@@ -125,8 +119,8 @@ get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (losers: [PLAYE
 
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
-            top_bug, _ := get_top_bug({x, y}, hive)
-            if top_bug != .Queen {
+            top_piece, empty := get_top_piece({x, y}, hive)
+            if empty || top_piece.bug != .Queen {
                 continue
             }
             queen_surrounded := true
@@ -137,8 +131,7 @@ get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (losers: [PLAYE
                 }
             }
             if queen_surrounded {
-                player_i, _ := lookup_hive_position({x, y})
-                losers[player_i] = true
+                losers[top_piece.player_i] = true
             }
         }
     }
@@ -174,6 +167,7 @@ set_hand_bugs :: proc(hand: ^[HAND_SIZE]Piece, bug: Bug, bug_count: int) {
         if hand[i].bug == .Empty {
             for j in 0..<bug_count {
                 hand[i+j].bug = bug
+                hand[i+j].hand_i = i+j
             }
             return
         }

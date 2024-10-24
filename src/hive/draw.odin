@@ -130,13 +130,14 @@ draw_game :: proc() {
                     rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 1, rl.GRAY)
                     rl.DrawTextEx(FONT, rl.TextFormat("%i %i", x, y), offset, FONT_SIZE, 2, rl.GRAY)
                 }
-                if should_highlight({x, y}, offset) {
-                    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 3, rl.BLUE)
-                }
             }
             else {
-                player_i, hand_i := lookup_hive_position({x, y})
-                draw_piece(offset, player_i, hand_i, hexagon)
+                piece, empty := get_top_piece({x, y})
+                assert(!empty)
+                draw_piece(offset, piece.player_i, piece.hand_i, hexagon)
+            }
+            if should_highlight({x, y}, offset) {
+                rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 3, rl.BLUE)
             }
             offset.x += 3 * hexagon.radius
         }

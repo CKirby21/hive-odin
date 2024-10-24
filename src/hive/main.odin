@@ -69,7 +69,7 @@ Opposite_Directions := [Direction]Direction {
 
 // :TODO: Update size for mosquitoes once they are added
 // Hive :: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack
-Stack :: sa.Small_Array(1+BEETLES*PLAYERS, Bug)
+Stack :: sa.Small_Array(1+BEETLES*PLAYERS, Piece)
 
 Slide :: struct {
     position: [2]int,
@@ -114,6 +114,8 @@ Piece :: struct {
     bug: Bug,
     bounds: Bounds,
     hive_position: [2]int,
+    player_i: int,
+    hand_i: int,
 }
 
 Logger_Opts :: log.Options{
@@ -162,7 +164,7 @@ init_game :: proc() {
     for i in 0..<PLAYERS {
         bounds := Bounds{ rl.Vector2{-1,-1}, rl.Vector2{-1,-1} }
         hive_position := [2]int{-1,-1}
-        piece := Piece{ .Empty, bounds, hive_position }
+        piece := Piece{ .Empty, bounds, hive_position, i, -1 }
         for j in 0..<HAND_SIZE {
             g_players[i].hand[j] = piece
         }
@@ -182,14 +184,6 @@ init_game :: proc() {
     // Init Hive
     assert(len(g_hive) == HIVE_X_LENGTH)
     g_hive = {}
-    // for i in 0..<HIVE_X_LENGTH {
-    //     for j in 0..<HIVE_Y_LENGTH {
-    //         // :FIXME:
-    //         stack: Stack
-    //         sa.append(&stack, Bug.Empty)
-    //         g_hive[i][j] = stack
-    //     }
-    // }
 
     sa.clear(&g_placeables)
     g_source = -1
@@ -215,29 +209,36 @@ update_game :: proc() {
 
     if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
         mouse := rl.GetMousePosition()
-        for player, i in g_players {
-            for piece, j in player.hand {
-                if within_bounds(piece.bounds, mouse) && i == g_player_with_turn {
-                    log.debugf("Selected a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
-                    
-                    err: bool 
-                    if is_in_hand(j) {
-                        err = populate_places()
-                    } else {
-                        err = populate_moves(j)
-                    }
-                    if !err {
-                        g_source = j
+        if g_source == -1 {
+            for player, i in g_players {
+                for piece, j in player.hand {
+                    if within_bounds(piece.bounds, mouse) && i == g_player_with_turn {
+                        err: bool 
+                        if is_in_hand(j) {
+                            err = populate_places()
+                        } else {
+                            if is_on_top(piece) {
+                                err = populate_moves(j)
+                            }
+                        }
+                        if err {
+                            log.debugf("Tried to select a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
+                        } else {
+                            g_source = j
+                            log.debugf("Selected a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
+                        }
                     }
                 }
             }
-        }
-        for i in 0..<sa.len(g_placeables) {
-            piece := sa.get(g_placeables, i)
-            if within_bounds(piece.bounds, mouse) {
-                log.assertf(0 <= g_source && g_source < HAND_SIZE, "%d", g_source)
-                place_piece(piece.hive_position)
+        } else {
+            log.assertf(0 <= g_source && g_source < HAND_SIZE, "%d", g_source)
+            for i in 0..<sa.len(g_placeables) {
+                piece := sa.get(g_placeables, i)
+                if within_bounds(piece.bounds, mouse) {
+                    place_piece(piece.hive_position)
+                }
             }
+            g_source = -1
         }
     }
 }
@@ -347,9 +348,9 @@ get_slides :: proc(position: [2]int, hive := g_hive) ->
 populate_distinct_slides :: proc(position: [2]int, hive := g_hive, slide_count: int) {
     slides := get_slides(position, hive)
     log.assertf(0 <= slide_count && slide_count < sa.len(slides) - 1, "%d", slide_count)
-    left := Piece{.Empty, Bounds{}, sa.get(slides, slide_count-1).position }
+    left := Piece{.Empty, Bounds{}, sa.get(slides, slide_count-1).position, -1, -1 }
     sa.append(&g_placeables, left)
-    right := Piece{.Empty, Bounds{}, sa.get(slides, sa.len(slides)-slide_count).position }
+    right := Piece{.Empty, Bounds{}, sa.get(slides, sa.len(slides)-slide_count).position, -1, -1 }
     sa.append(&g_placeables, right)
 }
 
@@ -381,7 +382,7 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
     case .Ant:
         slides := get_slides(piece.hive_position, hive)
         for i in 0..<sa.len(slides) {
-            placeable_piece := Piece{.Empty, Bounds{}, sa.get(slides, i).position}
+            placeable_piece := Piece{.Empty, Bounds{}, sa.get(slides, i).position, -1, -1}
             sa.append(&g_placeables, placeable_piece)
         }
     case .Grasshopper:
@@ -393,13 +394,32 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
             for !is_empty(curr, hive) {
                 curr, err = get_neighbor(curr, direction)
             }
-            placeable_piece := Piece{.Empty, Bounds{}, curr}
+            placeable_piece := Piece{.Empty, Bounds{}, curr, -1, -1}
             sa.append(&g_placeables, placeable_piece)
         }
     case .Spider:
         populate_distinct_slides(piece.hive_position, hive, 3)
     case .Beetle:
-        populate_distinct_slides(piece.hive_position, hive, 1)
+        stack := g_hive[piece.hive_position.x][piece.hive_position.y]
+        if sa.len(stack) > 1 {
+            // Assume beetle can be moved to any of its neighbor positions.
+            // :FIXME: This is not true in rare circumstances
+            for direction in Direction {
+                neighbor, err := get_neighbor(piece.hive_position, direction)
+                placeable_piece := Piece{.Empty, Bounds{}, neighbor, -1, -1}
+                sa.append(&g_placeables, placeable_piece)
+            }
+        } else {
+            populate_distinct_slides(piece.hive_position, hive, 1)
+            // Beetle can hop on top
+            for direction in Direction {
+                neighbor, err := get_neighbor(piece.hive_position, direction)
+                if !is_empty(neighbor, hive) {
+                    placeable_piece := Piece{.Empty, Bounds{}, neighbor, -1, -1}
+                    sa.append(&g_placeables, placeable_piece)
+                }
+            }
+        }
     }
 
     if sa.len(g_placeables) == 0 {
@@ -434,9 +454,12 @@ populate_places :: proc() -> (err: bool) {
     for x in 1..<HIVE_X_LENGTH-1 {
         for y in 1..<HIVE_Y_LENGTH-1 {
 
+            position := [2]int{x, y}
+            if !is_empty(position) {
+                continue
+            }
             friendlies := 0
             enemies := 0
-            position := [2]int{x, y}
             for direction in Direction {
                 neighbor, err := get_neighbor(position, direction)
                 if err {
@@ -445,8 +468,8 @@ populate_places :: proc() -> (err: bool) {
                 if is_empty(neighbor) {
                     continue
                 }
-                player_i, _ := lookup_hive_position(neighbor)
-                if player_i == g_player_with_turn {
+                piece, _ := get_top_piece(neighbor)
+                if piece.player_i == g_player_with_turn {
                     friendlies += 1
                 } else {
                     enemies += 1
@@ -487,7 +510,6 @@ place_piece :: proc(target: [2]int) {
     log.assertf(0 <= g_source && g_source < HAND_SIZE, "%d", g_source)
     log.assertf(0 <= target.x && target.x < HIVE_X_LENGTH, "%d", target.x)
     log.assertf(0 <= target.y && target.y < HIVE_Y_LENGTH, "%d", target.y)
-    assert(is_empty(target, g_hive))
     assert(validate_hive(g_hive))
 
     if !is_in_hand(g_source) {
@@ -497,10 +519,10 @@ place_piece :: proc(target: [2]int) {
 
     os.write_string(g_playback_file, fmt.aprintln(g_source, target.x, target.y))
 
-    bug := g_players[g_player_with_turn].hand[g_source].bug
-    sa.append(&g_hive[target.x][target.y], bug)
+    piece := g_players[g_player_with_turn].hand[g_source]
+    sa.append(&g_hive[target.x][target.y], piece)
     g_players[g_player_with_turn].hand[g_source].hive_position = target
-    log.debugf("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, bug, target.x, target.y)
+    log.debugf("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, piece.bug, target.x, target.y)
     g_source = -1
     sa.clear(&g_placeables)
 
@@ -516,10 +538,9 @@ place_piece :: proc(target: [2]int) {
 
 should_highlight :: proc(hive_position: [2]int, offset: rl.Vector2) -> (highlight: bool) {
     for i in 0..<sa.len(g_placeables) {
-        piece := sa.get(g_placeables, i)
+        piece: ^Piece = sa.get_ptr(&g_placeables, i)
         if piece.hive_position == hive_position {
             update_bounds(&piece.bounds, offset) // :FIX: Not sure if i like this here
-            sa.set(&g_placeables, i, piece)
             highlight = true
         }
     }
