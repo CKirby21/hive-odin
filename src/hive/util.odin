@@ -40,6 +40,13 @@ get_top_piece :: proc(position: [2]int, hive := g_hive) -> (Piece, bool) {
     return top_piece, empty
 }
 
+get_bottom_piece :: proc(position: [2]int, hive := g_hive) -> (Piece, bool) {
+    stack := hive[position.x][position.y]
+    top_piece, ok := sa.get_safe(stack, 0)
+    empty := !ok
+    return top_piece, empty
+}
+
 is_on_top :: proc(piece: Piece, hive := g_hive) -> bool {
     top_piece, empty := get_top_piece(piece.hive_position, hive)
     assert(!empty)
@@ -119,8 +126,8 @@ get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (losers: [PLAYE
 
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
-            top_piece, empty := get_top_piece({x, y}, hive)
-            if empty || top_piece.bug != .Queen {
+            bottom_piece, empty := get_bottom_piece({x, y}, hive)
+            if empty || bottom_piece.bug != .Queen {
                 continue
             }
             queen_surrounded := true
@@ -131,7 +138,7 @@ get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (losers: [PLAYE
                 }
             }
             if queen_surrounded {
-                losers[top_piece.player_i] = true
+                losers[bottom_piece.player_i] = true
             }
         }
     }
