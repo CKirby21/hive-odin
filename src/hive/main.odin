@@ -299,7 +299,7 @@ slide :: proc(curr: ^Slide, hive := g_hive, curr_start := false) {
         opposite := Opposite_Directions[direction]
         left := Adjacent_Directions[opposite][0] 
         right := Adjacent_Directions[opposite][1] 
-        can_slide := empties[left] || empties[right]
+        can_slide := empties[left] ~ empties[right]
         if neighbor_count > 0 && can_slide {
             curr^ = Slide{ neighbor, direction }
             return
