@@ -77,6 +77,11 @@ Bounds :: struct {
     max: rl.Vector2,
 }
 
+PositionBounds :: struct {
+    min: [2]int,
+    max: [2]int,
+}
+
 Player :: struct {
     hand: [HAND_SIZE]Piece,
     color: rl.Color
@@ -184,6 +189,12 @@ init_game :: proc() {
 }
 
 update_game :: proc() {
+
+    step: f32 = .1
+    g_zoom += rl.GetMouseWheelMove() * step 
+    if g_zoom < 0.5 { g_zoom = 0.5 }
+    if g_zoom > 2 { g_zoom = 2 }
+
     switch get_game_outcome(g_hive) {
     case .Undecided:
         // Do nothing
@@ -192,11 +203,6 @@ update_game :: proc() {
     case .Tie, .Win:
         return
     }
-
-    step: f32 = .1
-    g_zoom += rl.GetMouseWheelMove() * step 
-    if g_zoom < 0.5 { g_zoom = 0.5 }
-    if g_zoom > 2 { g_zoom = 2 }
 
     if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
         mouse := rl.GetMousePosition()

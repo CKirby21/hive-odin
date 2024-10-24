@@ -96,11 +96,35 @@ draw_game :: proc() {
     offset = { offset.x + (hexagon.width/2), offset.y + (hexagon.height/2) }
     controller := offset.x
 
+    hive_length := [2]int{HIVE_X_LENGTH, HIVE_Y_LENGTH}
+    measurer: rl.Vector2
+    for i in 0..<HIVE_Y_LENGTH {
+        measurer.y += hexagon.height / 2
+        if measurer.y > HIVE_HEIGHT {
+            hive_length.y = i
+            break
+        }
+    }
+    for i in 0..<HIVE_X_LENGTH {
+        measurer.x += hexagon.radius * 3
+        if measurer.x > HIVE_WIDTH {
+            hive_length.x = i
+            break
+        }
+    }
+    assert(hive_length.x != 0)
+    assert(hive_length.y != 0)
+    center := get_start()
+    hive_bounds: PositionBounds = {
+        {center.x - (hive_length.x/2), center.y - (hive_length.y/2)},
+        {center.x + (hive_length.x/2), center.y + (hive_length.y/2)}
+    }
+
     // Draw da hive
-    for y in 0..<HIVE_Y_LENGTH {
+    for y in hive_bounds.min.y..<hive_bounds.max.y {
         offset.x = controller + (f32(y % 2) * hexagon.radius * 1.5)
         // fmt.println(j, rotate, width, height)
-        for x in 0..<HIVE_X_LENGTH {
+        for x in hive_bounds.min.x..<hive_bounds.max.x {
             if g_hive[x][y] == .Empty {
                 if DRAW_GRID {
                     rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 1, rl.GRAY)
@@ -115,15 +139,9 @@ draw_game :: proc() {
                 draw_piece(offset, player_i, hand_i, hexagon)
             }
             offset.x += 3 * hexagon.radius
-            if offset.x >= HIVE_WIDTH {
-                break
-            }
         }
 
         offset.y += hexagon.height / 2
-        if offset.y >= HIVE_HEIGHT {
-            break
-        }
     }
 
     // Draw bugs in each player's hand
