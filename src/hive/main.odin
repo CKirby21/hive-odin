@@ -186,8 +186,7 @@ init_game :: proc() {
     assert(len(g_hive) == HIVE_X_LENGTH)
     g_hive = {}
 
-    sa.clear(&g_placeables)
-    g_source = -1
+    reset_turn_variables()
 
     log.debug("Finished initializing state.")
 }
@@ -214,15 +213,16 @@ update_game :: proc() {
             for player, i in g_players {
                 for piece, j in player.hand {
                     if within_bounds(piece.bounds, mouse) && i == g_player_with_turn {
-                        err: bool 
+                        err: bool = true
+                        reset_turn_variables()
                         if is_in_hand(j) {
                             err = populate_places()
-                        } else {
-                            if is_on_top(piece) {
-                                err = populate_moves(j)
-                            }
+                        } else if is_move_allowed(piece) {
+                            err = populate_moves(j)
                         }
+
                         if err {
+                            reset_turn_variables()
                             log.debugf("Tried to select a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
                         } else {
                             g_source = j
@@ -241,7 +241,7 @@ update_game :: proc() {
                     place_piece(g_source, destination)
                 }
             }
-            g_source = -1
+            reset_turn_variables()
         }
     }
 }
@@ -363,8 +363,6 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
     log.assert(!is_in_hand(i_hand),
         "Function should only be called if piece is already placed in the hive")
 
-    sa.clear(&g_placeables)
-
     // This is so that the current position does not contribute to the logic below
     piece := g_players[g_player_with_turn].hand[i_hand]
     hive := g_hive
@@ -434,8 +432,6 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
 
 populate_places :: proc() -> (err: bool) {
 
-    sa.clear(&g_placeables)
-
     placeable_piece := Piece{}
     occupied := get_occupied_positions(g_hive) 
     if occupied == 0 {
@@ -496,8 +492,7 @@ populate_places :: proc() -> (err: bool) {
 
 advance_turn :: proc() {
     log.assertf(0 <= g_player_with_turn && g_player_with_turn < PLAYERS, "%d", g_player_with_turn)
-    g_source = -1
-    sa.clear(&g_placeables)
+    reset_turn_variables()
 
     for _ in 0..<PLAYERS {
         g_player_with_turn += 1
@@ -534,6 +529,11 @@ place_piece :: proc(source: int, destination: int) {
     advance_turn()
 
     assert(validate_hive(g_hive))
+}
+
+reset_turn_variables :: proc() {
+    g_source = -1
+    sa.clear(&g_placeables)
 }
 
 should_highlight :: proc(hive_position: [2]int, offset: rl.Vector2) -> (highlight: bool) {

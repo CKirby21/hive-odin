@@ -51,15 +51,16 @@ playback_game :: proc(playback_filepath: string) {
 
             switch fields[0] {
             case "source":
+                // :FIXME: Theres gotta be a better way to not duplicate this
+                // Maybe populate_places should return a placeables array instead of 
+                // modifying the global?
+                reset_turn_variables()
                 g_source = strconv.atoi(fields[1])
-                err: bool
+                piece := g_players[g_player_with_turn].hand[g_source]
                 if is_in_hand(g_source) {
-                    err = populate_places()
-                } else {
-                    piece := g_players[g_player_with_turn].hand[g_source]
-                    if is_on_top(piece) {
-                        err = populate_moves(g_source)
-                    }
+                    populate_places()
+                } else if is_move_allowed(piece) {
+                    populate_moves(g_source)
                 }
             case "destination":
                 destination := strconv.atoi(fields[1])

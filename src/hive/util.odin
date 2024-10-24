@@ -63,6 +63,27 @@ is_empty :: proc(position: [2]int, hive := g_hive) -> bool {
     return empty
 }
 
+is_friendly_queen_played :: proc(player_i: int) -> bool {
+    for x in 0..<HIVE_X_LENGTH {
+        for y in 0..<HIVE_Y_LENGTH {
+            stack := g_hive[x][y]
+            for z in 0..<sa.len(stack) {
+                piece := sa.get(stack, z)
+                if piece.bug == .Queen && piece.player_i == player_i {
+                    return true
+                }
+            }
+        }
+    }
+    return false
+}
+
+is_move_allowed :: proc(piece: Piece) -> bool {
+    return !is_in_hand(piece.hand_i) && 
+            is_on_top(piece) && 
+            is_friendly_queen_played(piece.player_i)
+}
+
 get_iso8601_timestamp :: proc() -> string {
     now := time.now()
     hms_buf: [time.MIN_HMS_LEN + 1]u8
