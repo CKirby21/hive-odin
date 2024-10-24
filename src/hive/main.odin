@@ -120,6 +120,8 @@ Logger_Opts :: log.Options{
 }
 
 main :: proc() {
+    context.assertion_failure_proc = report_assertion_failure
+
     logger := log.create_console_logger(log.Level.Debug, Logger_Opts)
     context.logger = logger
     defer log.destroy_console_logger(logger)

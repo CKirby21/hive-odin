@@ -8,6 +8,7 @@ import "core:log"
 import "core:math"
 import "core:time"
 import "core:slice"
+import "base:runtime"
 
 GameOutcome :: enum {
     Undecided,
@@ -167,5 +168,18 @@ set_hand_bugs :: proc(hand: ^[HAND_SIZE]Piece, bug: Bug, bug_count: int) {
             return
         }
     }
+}
+
+// See https://pkg.odin-lang.org/core/debug/trace/#Context
+report_assertion_failure :: proc(prefix, message: string, loc := #caller_location) -> ! {
+    runtime.print_caller_location(loc)
+    runtime.print_string(" ")
+    runtime.print_string(prefix)
+    if len(message) > 0 {
+        runtime.print_string(": ")
+        runtime.print_string(message)
+    }
+    runtime.print_byte('\n')
+    runtime.trap()
 }
 
