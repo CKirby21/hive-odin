@@ -138,9 +138,11 @@ main :: proc() {
     FONT = rl.GetFontDefault()
     rl.SetTargetFPS(60)
 
-    g_playback_file = create_playback_file()
-
     if len(os.args) == 1 {
+        // Only create the playback file for real games
+        g_playback_file = create_playback_file()
+        defer os.close(g_playback_file)
+
         init_game()
         for !rl.WindowShouldClose() { // Detect window close button or ESC key
             update_game()
@@ -151,7 +153,6 @@ main :: proc() {
         assert(len(os.args) == 2)
         playback_game(os.args[1])
     }
-    os.close(g_playback_file)
 }
 
 init_game :: proc() {
@@ -225,6 +226,7 @@ update_game :: proc() {
                             log.debugf("Tried to select a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
                         } else {
                             g_source = j
+                            os.write_string(g_playback_file, fmt.aprintln("source", g_source))
                             log.debugf("Selected a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
                         }
                     }
@@ -232,10 +234,11 @@ update_game :: proc() {
             }
         } else {
             log.assertf(0 <= g_source && g_source < HAND_SIZE, "%d", g_source)
-            for i in 0..<sa.len(g_placeables) {
-                piece := sa.get(g_placeables, i)
+            for destination in 0..<sa.len(g_placeables) {
+                piece := sa.get(g_placeables, destination)
                 if within_bounds(piece.bounds, mouse) {
-                    place_piece(piece.hive_position)
+                    os.write_string(g_playback_file, fmt.aprintln("destination", destination))
+                    place_piece(g_source, destination)
                 }
             }
             g_source = -1
@@ -493,6 +496,8 @@ populate_places :: proc() -> (err: bool) {
 
 advance_turn :: proc() {
     log.assertf(0 <= g_player_with_turn && g_player_with_turn < PLAYERS, "%d", g_player_with_turn)
+    g_source = -1
+    sa.clear(&g_placeables)
 
     for _ in 0..<PLAYERS {
         g_player_with_turn += 1
@@ -506,32 +511,27 @@ advance_turn :: proc() {
     log.assertf(0 <= g_player_with_turn && g_player_with_turn < PLAYERS, "%d", g_player_with_turn)
 }
 
-place_piece :: proc(target: [2]int) {
-    log.assertf(0 <= g_source && g_source < HAND_SIZE, "%d", g_source)
-    log.assertf(0 <= target.x && target.x < HIVE_X_LENGTH, "%d", target.x)
-    log.assertf(0 <= target.y && target.y < HIVE_Y_LENGTH, "%d", target.y)
+// source is index into the player's hand
+// destination is index into the placeables array
+place_piece :: proc(source: int, destination: int) {
+    log.assertf(0 <= source && source < HAND_SIZE, "%d", source)
+    log.assertf(0 <= destination && destination < sa.len(g_placeables), "%d", destination)
+    position := sa.get(g_placeables, destination).hive_position
+    log.assertf(0 <= position.x && position.x < HIVE_X_LENGTH, "%d", position.x)
+    log.assertf(0 <= position.y && position.y < HIVE_Y_LENGTH, "%d", position.y)
     assert(validate_hive(g_hive))
 
-    if !is_in_hand(g_source) {
-        source := g_players[g_player_with_turn].hand[g_source].hive_position
+    if !is_in_hand(source) {
+        source := g_players[g_player_with_turn].hand[source].hive_position
         sa.pop_back(&g_hive[source.x][source.y])
     }
 
-    os.write_string(g_playback_file, fmt.aprintln(g_source, target.x, target.y))
-
-    piece := g_players[g_player_with_turn].hand[g_source]
-    sa.append(&g_hive[target.x][target.y], piece)
-    g_players[g_player_with_turn].hand[g_source].hive_position = target
-    log.debugf("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, piece.bug, target.x, target.y)
-    g_source = -1
-    sa.clear(&g_placeables)
+    piece := g_players[g_player_with_turn].hand[source]
+    sa.append(&g_hive[position.x][position.y], piece)
+    g_players[g_player_with_turn].hand[source].hive_position = position
+    log.debugf("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, piece.bug, position.x, position.y)
 
     advance_turn()
-
-    // :TODO: Skip players that can't play. Infinite loop?
-    // for !can_play() {
-    //     advance_turn()
-    // }
 
     assert(validate_hive(g_hive))
 }

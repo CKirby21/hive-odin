@@ -18,7 +18,6 @@ create_playback_file :: proc() -> os.Handle {
     playback_filename := fmt.aprintf("playback_%s.txt", get_iso8601_timestamp())
     log.debugf("Capuring game file <%s> for later playback", playback_filename)
     playback_file, err := os.open(playback_filename, (os.O_CREATE | os.O_TRUNC | os.O_RDWR), mode)
-    os.write_string(playback_file, fmt.aprintln("source", "target.x", "target.y"))
     log.assertf(err == os.ERROR_NONE, "Failed to open <%s", playback_filename)
     return playback_file
 }
@@ -26,52 +25,46 @@ create_playback_file :: proc() -> os.Handle {
 playback_game :: proc(playback_filepath: string) {
     init_game()
 
-    Turn :: struct {
-        source: int,
-        target: [2]int,
-    }
-
     data, ok := os.read_entire_file(playback_filepath, context.allocator)
     defer delete(data)
     assert(ok)
+    data_string := string(data)
 
-    turns: [dynamic]Turn
-    defer delete(turns)
 
-    it := string(data)
-    log.debugf("Parsing playback file <%s>...", playback_filepath)
-    for line in strings.split_lines_iterator(&it) {
-        if line == "" { continue }
-        fields := strings.fields(line)
-        assert(len(fields) == 3)
-        if fields[0] == "source" {
-            assert(fields[1] == "target.x")
-            assert(fields[2] == "target.y")
-            continue
-        }
-        source := strconv.atoi(fields[0])
-        target := [2]int{
-            strconv.atoi(fields[1]),
-            strconv.atoi(fields[2]),
-        }
-        append(&turns, Turn { source, target })
-    }
-
-    turn := 0
     stopwatch: time.Stopwatch
     time.stopwatch_start(&stopwatch)
-    delay := 1000 * time.Millisecond
-    log.debugf("Playback starting with a delay of %.0f ms between states...", time.duration_milliseconds(delay))
+    delay := 500 * time.Millisecond
+    log.debugf("Playback starting with a delay of %.0f ms between lines...", time.duration_milliseconds(delay))
 
     for !rl.WindowShouldClose() {
         if time.stopwatch_duration(stopwatch) > delay {
-            if turn >= len(turns) {
+            line, ok := strings.split_lines_iterator(&data_string)
+            if !ok {
                 break
             }
-            log.debug("Playing back turn <%d>", turn)
-            g_source = turns[turn].source
-            place_piece(turns[turn].target)
-            turn += 1
+            if line == "" {
+                continue
+            }
+            log.debugf("Playing back <%s>", line)
+            fields := strings.fields(line)
+            assert(len(fields) == 2)
+
+            switch fields[0] {
+            case "source":
+                g_source = strconv.atoi(fields[1])
+                err: bool
+                if is_in_hand(g_source) {
+                    err = populate_places()
+                } else {
+                    piece := g_players[g_player_with_turn].hand[g_source]
+                    if is_on_top(piece) {
+                        err = populate_moves(g_source)
+                    }
+                }
+            case "destination":
+                destination := strconv.atoi(fields[1])
+                place_piece(g_source, destination)
+            }
             time.stopwatch_reset(&stopwatch)
             time.stopwatch_start(&stopwatch)
         }
