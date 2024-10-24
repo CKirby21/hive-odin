@@ -16,7 +16,8 @@ GameOutcome :: enum {
     Win
 }
 
-get_neighbor :: proc(position: [2]int, direction: Direction) -> (neighbor: [2]int, err: bool) {
+// Use this if the position is on the edge of the hive
+get_neighbor_safe :: proc(position: [2]int, direction: Direction) -> (neighbor: [2]int, err: bool) {
 
     direction_vectors: [Direction][2]int
     if position.y % 2 == 0 {
@@ -26,9 +27,22 @@ get_neighbor :: proc(position: [2]int, direction: Direction) -> (neighbor: [2]in
     }
     vector := direction_vectors[direction]
     neighbor = [2]int{position.x+vector.x, position.y+vector.y}
-    err = neighbor.x < 0 || HIVE_X_LENGTH <= neighbor.x || 
+    err = neighbor.x < 0 || HIVE_X_LENGTH <= neighbor.x ||
           neighbor.y < 0 || HIVE_Y_LENGTH <= neighbor.y
     return neighbor, err
+}
+
+// Use this most often
+get_neighbor :: proc(position: [2]int, direction: Direction) -> (neighbor: [2]int) {
+
+    neighbor, _ = get_neighbor_safe(position, direction)
+    assert_index(neighbor.x, HIVE_X_LENGTH)
+    assert_index(neighbor.y, HIVE_Y_LENGTH)
+    return neighbor
+}
+
+get_bug :: proc(position: [2]int, hive := g_hive) -> (bug: Bug) {
+    return hive[position.x][position.y]
 }
 
 get_iso8601_timestamp :: proc() -> string {
@@ -119,7 +133,7 @@ get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (losers: [PLAYERS
             }
             queen_surrounded := true
             for direction in Direction {
-                neighbor, err := get_neighbor({x, y}, direction)
+                neighbor, err := get_neighbor_safe({x, y}, direction)
                 if err || hive[neighbor.x][neighbor.y] == .Empty {
                     queen_surrounded = false
                 }
@@ -157,3 +171,17 @@ get_game_outcome :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (game_outco
     return game_outcome
 }
 
+// can_slide :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug, direction: Direction) -> 
+//     (game_outcome: GameOutcome) {
+//
+//     neighbor_occupied_directions: [Direction]bool
+//     for neighbor_direction in Direction {
+//         neighbor_neighbor, err := get_neighbor(neighbor, neighbor_direction)
+//         if err {
+//             continue
+//         }
+//         if hive[neighbor_neighbor.x][neighbor_neighbor.y] != .Empty {
+//             continue
+//         }
+//     }
+// }

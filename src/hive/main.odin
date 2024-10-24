@@ -44,15 +44,23 @@ Odd_Direction_Vectors := [Direction][2]int {
     .Northwest = {  0, -1 },
 }
 
-// Opposite_Directions := [Direction]Direction {
-//     .None      = .None,
-//     .North     = .South,
-//     .Northeast = .Southwest,
-//     .Southeast = .Northwest,
-//     .South     = .North,
-//     .Southwest = .Northeast,
-//     .Northwest = .Southeast,
-// }
+Adjacent_Directions := [Direction][2]Direction {
+    .North     = { .Northwest, .Northeast },
+    .Northeast = { .North,     .Southeast },
+    .Southeast = { .Northeast, .South },
+    .South     = { .Southeast, .Southwest },
+    .Southwest = { .South,     .Northwest },
+    .Northwest = { .Southwest, .North },
+}
+
+Opposite_Directions := [Direction]Direction {
+    .North     = .South,
+    .Northeast = .Southwest,
+    .Southeast = .Northwest,
+    .South     = .North,
+    .Southwest = .Northeast,
+    .Northwest = .Southeast,
+}
 
 Bounds :: struct {
     min: rl.Vector2,
@@ -241,8 +249,8 @@ validate_hive :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (valid_hive: b
             break
         }
         for direction in Direction {
-            neighbor, err := get_neighbor(position, direction)
-            if err || hive[neighbor.x][neighbor.y] == .Empty {
+            neighbor := get_neighbor(position, direction)
+            if hive[neighbor.x][neighbor.y] == .Empty {
                 continue
             }
             // log.debug("Neighbor:", neighbor, err, direction, hive[neighbor.x][neighbor.y])
@@ -277,25 +285,32 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
         return err
     }
 
-    for x in 0..<HIVE_X_LENGTH {
-        for y in 0..<HIVE_Y_LENGTH {
-
-            position := [2]int{x, y}
-            neighbors := 0
-            for direction in Direction {
-                neighbor, err := get_neighbor(position, direction)
-                if err {
-                    continue
-                }
-                if hive[neighbor.x][neighbor.y] != .Empty {
-                    neighbors += 1
+    #partial switch piece.bug {
+    case .Empty:
+        panic("Should never be populating moves for an empty bug")
+    case .Queen:
+        for direction in Direction {
+            neighbor := get_neighbor(piece.hive_position, direction)
+            if get_bug(neighbor, hive) != .Empty {
+                continue
+            }
+            // Investigate neighbor's neighbors
+            neighbor_count := 0
+            empties: [Direction]bool
+            for neighbor_direction in Direction {
+                neighbor_neighbor := get_neighbor(neighbor, neighbor_direction)
+                if get_bug(neighbor_neighbor, hive) == .Empty {
+                    empties[neighbor_direction] = true
+                } else {
+                    neighbor_count += 1
                 }
             }
-
-            // Add new piece
-            if 0 < neighbors && neighbors <= 4 && position != piece.hive_position {
+            opposite := Opposite_Directions[direction]
+            left := Adjacent_Directions[opposite][0] 
+            right := Adjacent_Directions[opposite][1] 
+            if neighbor_count > 0 && (empties[left] || empties[right]) {
                 placeable_piece := Piece{}
-                placeable_piece.hive_position = position
+                placeable_piece.hive_position = neighbor
                 sa.append(&g_placeables, placeable_piece)
             }
         }
@@ -321,22 +336,22 @@ populate_places :: proc() -> (err: bool) {
     }
     else if occupied == 1 {
         for direction in Direction {
-            neighbor, err := get_neighbor(get_start(), direction)
-            assert(!err)
+            neighbor := get_neighbor(get_start(), direction)
             placeable_piece.hive_position = neighbor
             sa.append(&g_placeables, placeable_piece)
         }
         return false
     }
 
-    for x in 0..<HIVE_X_LENGTH {
-        for y in 0..<HIVE_Y_LENGTH {
+    // The bounds are smaller to avoid going outside the hive
+    for x in 1..<HIVE_X_LENGTH-1 {
+        for y in 1..<HIVE_Y_LENGTH-1 {
 
             friendlies := 0
             enemies := 0
             position := [2]int{x, y}
             for direction in Direction {
-                neighbor, err := get_neighbor(position, direction)
+                neighbor, err := get_neighbor_safe(position, direction)
                 if err {
                     continue
                 }

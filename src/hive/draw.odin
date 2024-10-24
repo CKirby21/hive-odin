@@ -26,7 +26,7 @@ FONT: rl.Font
 SPACING_X :: 0
 SPACING_Y :: 5 
 
-DRAW_GRID :: false
+DRAW_GRID :: true
 
 Bug_Colors := [Bug]rl.Color {
     .Empty       = rl.WHITE,
