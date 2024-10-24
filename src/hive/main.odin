@@ -371,7 +371,17 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
             sa.append(&g_placeables, placeable_piece)
         }
     case .Grasshopper:
-        // :TODO:
+        for direction in Direction {
+            curr, err := get_neighbor(piece.hive_position, direction)
+            if get_bug(curr, hive) == .Empty {
+                continue
+            }
+            for get_bug(curr, hive) != .Empty {
+                curr, err = get_neighbor(curr, direction)
+            }
+            placeable_piece := Piece{.Empty, Bounds{}, curr}
+            sa.append(&g_placeables, placeable_piece)
+        }
     case .Spider:
         populate_distinct_slides(piece.hive_position, hive, 3)
     case .Beetle:
