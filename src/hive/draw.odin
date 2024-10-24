@@ -125,7 +125,7 @@ draw_game :: proc() {
         offset.x = controller + (f32(y % 2) * hexagon.radius * 1.5)
         // fmt.println(j, rotate, width, height)
         for x in hive_bounds.min.x..<hive_bounds.max.x {
-            if g_hive[x][y] == .Empty {
+            if is_empty({x, y}) {
                 if DRAW_GRID {
                     rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 1, rl.GRAY)
                     rl.DrawTextEx(FONT, rl.TextFormat("%i %i", x, y), offset, FONT_SIZE, 2, rl.GRAY)

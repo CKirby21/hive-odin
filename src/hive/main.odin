@@ -23,7 +23,7 @@ HAND_SIZE :: QUEENS+ANTS+GRASSHOPPERS+SPIDERS+BEETLES
 
 HIVE_X_LENGTH    :: 15
 HIVE_Y_LENGTH      :: 40 
-g_hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
+g_hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack
 g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
 
 g_playback_file: os.Handle
@@ -66,6 +66,10 @@ Opposite_Directions := [Direction]Direction {
     .Southwest = .Northeast,
     .Northwest = .Southeast,
 }
+
+// :TODO: Update size for mosquitoes once they are added
+// Hive :: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack
+Stack :: sa.Small_Array(1+BEETLES*PLAYERS, Bug)
 
 Slide :: struct {
     position: [2]int,
@@ -178,11 +182,14 @@ init_game :: proc() {
     // Init Hive
     assert(len(g_hive) == HIVE_X_LENGTH)
     g_hive = {}
-    for i in 0..<HIVE_X_LENGTH {
-        for j in 0..<HIVE_Y_LENGTH {
-            g_hive[i][j] = .Empty
-        }
-    }
+    // for i in 0..<HIVE_X_LENGTH {
+    //     for j in 0..<HIVE_Y_LENGTH {
+    //         // :FIXME:
+    //         stack: Stack
+    //         sa.append(&stack, Bug.Empty)
+    //         g_hive[i][j] = stack
+    //     }
+    // }
 
     sa.clear(&g_placeables)
     g_source = -1
@@ -239,7 +246,7 @@ update_game :: proc() {
 // is attached to at least one other bug
 //
 // Caller is responsible for asserting that the return value is true
-validate_hive :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (valid_hive: bool) {
+validate_hive :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (valid_hive: bool) {
 
     valid_hive = true
 
@@ -252,7 +259,7 @@ validate_hive :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (valid_hive: b
     out:
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
-            if hive[x][y] != .Empty {
+            if !is_empty({x, y}, hive) {
                 sa.append(&neighbors, [2]int{x, y})
                 break out
             }
@@ -267,10 +274,9 @@ validate_hive :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (valid_hive: b
         for direction in Direction {
             neighbor, err := get_neighbor(position, direction)
             log.assertf(!err, "%d %d", neighbor.x, neighbor.y)
-            if hive[neighbor.x][neighbor.y] == .Empty {
+            if is_empty(neighbor, hive) {
                 continue
             }
-            // log.debug("Neighbor:", neighbor, err, direction, hive[neighbor.x][neighbor.y])
             if !slice.contains(sa.slice(&neighbors), neighbor) {
                 sa.append(&neighbors, neighbor)
             }
@@ -297,7 +303,7 @@ slide :: proc(curr: ^Slide, hive := g_hive, curr_start := false) {
         }
         neighbor, err := get_neighbor(curr.position, direction)
         log.assertf(!err, "%d %d", neighbor.x, neighbor.y)
-        if get_bug(neighbor, hive) != .Empty {
+        if !is_empty(neighbor, hive) {
             continue
         }
         // Investigate neighbor's neighbors
@@ -306,7 +312,7 @@ slide :: proc(curr: ^Slide, hive := g_hive, curr_start := false) {
         for neighbor_direction in Direction {
             neighbor_neighbor, err := get_neighbor(neighbor, neighbor_direction)
             log.assertf(!err, "%d %d", neighbor_neighbor.x, neighbor_neighbor.y)
-            if get_bug(neighbor_neighbor, hive) == .Empty {
+            if is_empty(neighbor_neighbor, hive) {
                 empties[neighbor_direction] = true
             } else {
                 neighbor_count += 1
@@ -358,7 +364,7 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
     // This is so that the current position does not contribute to the logic below
     piece := g_players[g_player_with_turn].hand[i_hand]
     hive := g_hive
-    hive[piece.hive_position.x][piece.hive_position.y] = .Empty
+    sa.pop_back(&hive[piece.hive_position.x][piece.hive_position.y])
 
     // Check if moving would break the hive
     if !validate_hive(hive) {
@@ -381,10 +387,10 @@ populate_moves :: proc(i_hand: int) -> (err: bool) {
     case .Grasshopper:
         for direction in Direction {
             curr, err := get_neighbor(piece.hive_position, direction)
-            if get_bug(curr, hive) == .Empty {
+            if is_empty(curr, hive) {
                 continue
             }
-            for get_bug(curr, hive) != .Empty {
+            for !is_empty(curr, hive) {
                 curr, err = get_neighbor(curr, direction)
             }
             placeable_piece := Piece{.Empty, Bounds{}, curr}
@@ -436,7 +442,7 @@ populate_places :: proc() -> (err: bool) {
                 if err {
                     continue
                 }
-                if g_hive[neighbor.x][neighbor.y] == .Empty {
+                if is_empty(neighbor) {
                     continue
                 }
                 player_i, _ := lookup_hive_position(neighbor)
@@ -481,18 +487,18 @@ place_piece :: proc(target: [2]int) {
     log.assertf(0 <= g_source && g_source < HAND_SIZE, "%d", g_source)
     log.assertf(0 <= target.x && target.x < HIVE_X_LENGTH, "%d", target.x)
     log.assertf(0 <= target.y && target.y < HIVE_Y_LENGTH, "%d", target.y)
-    assert(g_hive[target.x][target.y] == .Empty)
+    assert(is_empty(target, g_hive))
     assert(validate_hive(g_hive))
 
     if !is_in_hand(g_source) {
         source := g_players[g_player_with_turn].hand[g_source].hive_position
-        g_hive[source.x][source.y] = .Empty
+        sa.pop_back(&g_hive[source.x][source.y])
     }
 
     os.write_string(g_playback_file, fmt.aprintln(g_source, target.x, target.y))
 
     bug := g_players[g_player_with_turn].hand[g_source].bug
-    g_hive[target.x][target.y] = bug
+    sa.append(&g_hive[target.x][target.y], bug)
     g_players[g_player_with_turn].hand[g_source].hive_position = target
     log.debugf("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, bug, target.x, target.y)
     g_source = -1

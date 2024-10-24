@@ -9,6 +9,7 @@ import "core:math"
 import "core:time"
 import "core:slice"
 import "base:runtime"
+import sa "core:container/small_array"
 
 GameOutcome :: enum {
     Undecided,
@@ -32,8 +33,16 @@ get_neighbor :: proc(position: [2]int, direction: Direction) -> (neighbor: [2]in
     return neighbor, err
 }
 
-get_bug :: proc(position: [2]int, hive := g_hive) -> (bug: Bug) {
-    return hive[position.x][position.y]
+get_top_bug :: proc(position: [2]int, hive := g_hive) -> (Bug, bool) {
+    stack := hive[position.x][position.y]
+    top_bug, ok := sa.get_safe(stack, sa.len(stack) - 1)
+    empty := !ok
+    return top_bug, empty
+}
+
+is_empty :: proc(position: [2]int, hive := g_hive) -> bool {
+    _, empty := get_top_bug(position, hive)
+    return empty
 }
 
 get_iso8601_timestamp :: proc() -> string {
@@ -46,10 +55,10 @@ get_iso8601_timestamp :: proc() -> string {
 
 }
 
-get_occupied_positions :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (occupied_positions: int) {
+get_occupied_positions :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (occupied_positions: int) {
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
-            if hive[x][y] != .Empty {
+            if !is_empty({x, y}, hive) {
                 occupied_positions += 1
             }
         }
@@ -82,7 +91,7 @@ is_in_hand :: proc(i_hand: int) -> bool {
 lookup_hive_position :: proc(hive_position: [2]int) -> (player_i: int, hand_i: int) {
     log.assertf(0 <= hive_position.x && hive_position.x < HIVE_X_LENGTH, "%d", hive_position.x)
     log.assertf(0 <= hive_position.y && hive_position.y < HIVE_Y_LENGTH, "%d", hive_position.y)
-    log.assert(g_hive[hive_position.x][hive_position.y] != .Empty)
+    log.assert(!is_empty(hive_position))
 
     i := -1
     for j in 0..<PLAYERS {
@@ -112,17 +121,18 @@ can_play :: proc() -> bool {
     return play
 }
 
-get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (losers: [PLAYERS]bool) {
+get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (losers: [PLAYERS]bool) {
 
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
-            if hive[x][y] != .Queen {
+            top_bug, _ := get_top_bug({x, y}, hive)
+            if top_bug != .Queen {
                 continue
             }
             queen_surrounded := true
             for direction in Direction {
                 neighbor, err := get_neighbor({x, y}, direction)
-                if err || hive[neighbor.x][neighbor.y] == .Empty {
+                if err || is_empty(neighbor, hive) {
                     queen_surrounded = false
                 }
             }
@@ -135,7 +145,7 @@ get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (losers: [PLAYERS
     return losers
 }
 
-get_winners :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (winners: [PLAYERS]bool) {
+get_winners :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (winners: [PLAYERS]bool) {
     losers := get_losers(hive)
     for i in 0..<PLAYERS {
         winners[i] = !losers[i]
@@ -143,7 +153,7 @@ get_winners :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (winners: [PLAYE
     return winners
 }
 
-get_game_outcome :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (game_outcome: GameOutcome) {
+get_game_outcome :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (game_outcome: GameOutcome) {
     winners := get_winners(hive)
     winner_count := slice.count(winners[:], true)
     switch winner_count {
