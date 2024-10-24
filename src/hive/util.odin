@@ -16,8 +16,7 @@ GameOutcome :: enum {
     Win
 }
 
-// Use this if the position is on the edge of the hive
-get_neighbor_safe :: proc(position: [2]int, direction: Direction) -> (neighbor: [2]int, err: bool) {
+get_neighbor :: proc(position: [2]int, direction: Direction) -> (neighbor: [2]int, err: bool) {
 
     direction_vectors: [Direction][2]int
     if position.y % 2 == 0 {
@@ -30,15 +29,6 @@ get_neighbor_safe :: proc(position: [2]int, direction: Direction) -> (neighbor: 
     err = neighbor.x < 0 || HIVE_X_LENGTH <= neighbor.x ||
           neighbor.y < 0 || HIVE_Y_LENGTH <= neighbor.y
     return neighbor, err
-}
-
-// Use this most often
-get_neighbor :: proc(position: [2]int, direction: Direction) -> (neighbor: [2]int) {
-
-    neighbor, _ = get_neighbor_safe(position, direction)
-    assert_index(neighbor.x, HIVE_X_LENGTH)
-    assert_index(neighbor.y, HIVE_Y_LENGTH)
-    return neighbor
 }
 
 get_bug :: proc(position: [2]int, hive := g_hive) -> (bug: Bug) {
@@ -67,12 +57,9 @@ get_occupied_positions :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (occu
 }
 
 update_bounds :: proc(bounds: ^Bounds, offset: rl.Vector2) {
-    bounds.min = {offset.x-HEXAGON_WIDTH_FRACTION, offset.y-HEXAGON_HEIGHT_FRACTION}
-    bounds.max = {offset.x+HEXAGON_WIDTH_FRACTION, offset.y+HEXAGON_HEIGHT_FRACTION}
-}
-
-assert_index :: proc(index: int, max: int) {
-    log.assertf(0 <= index && index < max, "0 <= %d < %d", index, max)
+    hexagon := get_hexagon(g_zoom)
+    bounds.min = {offset.x-hexagon.width_fraction, offset.y-hexagon.height_fraction}
+    bounds.max = {offset.x+hexagon.width_fraction, offset.y+hexagon.height_fraction}
 }
 
 within_bounds :: proc(bounds: Bounds, position: rl.Vector2) -> (within: bool) {
@@ -87,13 +74,13 @@ get_start :: proc() -> (start: [2]int) {
 }
 
 is_in_hand :: proc(i_hand: int) -> bool {
-    assert_index(i_hand, HAND_SIZE)
+    log.assertf(0 <= i_hand && i_hand < HAND_SIZE, "%d", i_hand)
     return g_players[g_player_with_turn].hand[i_hand].hive_position == {-1, -1}
 }
 
 lookup_hive_position :: proc(hive_position: [2]int) -> (player_i: int, hand_i: int) {
-    assert_index(hive_position.x, HIVE_X_LENGTH)
-    assert_index(hive_position.y, HIVE_Y_LENGTH)
+    log.assertf(0 <= hive_position.x && hive_position.x < HIVE_X_LENGTH, "%d", hive_position.x)
+    log.assertf(0 <= hive_position.y && hive_position.y < HIVE_Y_LENGTH, "%d", hive_position.y)
     log.assert(g_hive[hive_position.x][hive_position.y] != .Empty)
 
     i := -1
@@ -133,7 +120,7 @@ get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (losers: [PLAYERS
             }
             queen_surrounded := true
             for direction in Direction {
-                neighbor, err := get_neighbor_safe({x, y}, direction)
+                neighbor, err := get_neighbor({x, y}, direction)
                 if err || hive[neighbor.x][neighbor.y] == .Empty {
                     queen_surrounded = false
                 }

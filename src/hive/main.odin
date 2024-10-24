@@ -21,8 +21,8 @@ SPIDERS      :: 2
 BEETLES      :: 2
 HAND_SIZE :: QUEENS+ANTS+GRASSHOPPERS+SPIDERS+BEETLES
 
-HIVE_X_LENGTH    :: 8
-HIVE_Y_LENGTH      :: 20 
+HIVE_X_LENGTH    :: 15
+HIVE_Y_LENGTH      :: 40 
 g_hive:           [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug
 g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
 
@@ -193,6 +193,11 @@ update_game :: proc() {
         return
     }
 
+    step: f32 = .1
+    g_zoom += rl.GetMouseWheelMove() * step 
+    if g_zoom < 0.5 { g_zoom = 0.5 }
+    if g_zoom > 2 { g_zoom = 2 }
+
     if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
         mouse := rl.GetMousePosition()
         for player, i in g_players {
@@ -215,7 +220,7 @@ update_game :: proc() {
         for i in 0..<sa.len(g_placeables) {
             piece := sa.get(g_placeables, i)
             if within_bounds(piece.bounds, mouse) {
-                assert_index(g_source, HAND_SIZE)
+                log.assertf(0 <= g_source && g_source < HAND_SIZE, "%d", g_source)
                 place_piece(piece.hive_position)
             }
         }
@@ -252,7 +257,8 @@ validate_hive :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Bug) -> (valid_hive: b
             break
         }
         for direction in Direction {
-            neighbor := get_neighbor(position, direction)
+            neighbor, err := get_neighbor(position, direction)
+            log.assertf(!err, "%d %d", neighbor.x, neighbor.y)
             if hive[neighbor.x][neighbor.y] == .Empty {
                 continue
             }
@@ -281,7 +287,8 @@ slide :: proc(curr: ^Slide, hive := g_hive, curr_start := false) {
                 continue
             }
         }
-        neighbor := get_neighbor(curr.position, direction)
+        neighbor, err := get_neighbor(curr.position, direction)
+        log.assertf(!err, "%d %d", neighbor.x, neighbor.y)
         if get_bug(neighbor, hive) != .Empty {
             continue
         }
@@ -289,7 +296,8 @@ slide :: proc(curr: ^Slide, hive := g_hive, curr_start := false) {
         neighbor_count := 0
         empties: [Direction]bool
         for neighbor_direction in Direction {
-            neighbor_neighbor := get_neighbor(neighbor, neighbor_direction)
+            neighbor_neighbor, err := get_neighbor(neighbor, neighbor_direction)
+            log.assertf(!err, "%d %d", neighbor_neighbor.x, neighbor_neighbor.y)
             if get_bug(neighbor_neighbor, hive) == .Empty {
                 empties[neighbor_direction] = true
             } else {
@@ -324,7 +332,7 @@ get_slides :: proc(position: [2]int, hive := g_hive) ->
 
 populate_distinct_slides :: proc(position: [2]int, hive := g_hive, slide_count: int) {
     slides := get_slides(position, hive)
-    assert_index(slide_count, sa.len(slides) - 1)
+    log.assertf(0 <= slide_count && slide_count < sa.len(slides) - 1, "%d", slide_count)
     left := Piece{.Empty, Bounds{}, sa.get(slides, slide_count-1).position }
     sa.append(&g_placeables, left)
     right := Piece{.Empty, Bounds{}, sa.get(slides, sa.len(slides)-slide_count).position }
@@ -390,7 +398,8 @@ populate_places :: proc() -> (err: bool) {
     }
     else if occupied == 1 {
         for direction in Direction {
-            neighbor := get_neighbor(get_start(), direction)
+            neighbor, err := get_neighbor(get_start(), direction)
+            log.assertf(!err, "%d %d", neighbor.x, neighbor.y)
             placeable_piece.hive_position = neighbor
             sa.append(&g_placeables, placeable_piece)
         }
@@ -405,7 +414,7 @@ populate_places :: proc() -> (err: bool) {
             enemies := 0
             position := [2]int{x, y}
             for direction in Direction {
-                neighbor, err := get_neighbor_safe(position, direction)
+                neighbor, err := get_neighbor(position, direction)
                 if err {
                     continue
                 }
@@ -436,7 +445,7 @@ populate_places :: proc() -> (err: bool) {
 }
 
 advance_turn :: proc() {
-    assert_index(g_player_with_turn, PLAYERS)
+    log.assertf(0 <= g_player_with_turn && g_player_with_turn < PLAYERS, "%d", g_player_with_turn)
 
     for _ in 0..<PLAYERS {
         g_player_with_turn += 1
@@ -447,13 +456,13 @@ advance_turn :: proc() {
     }
     log.assert(g_eliminations[g_player_with_turn] == false, "At least one player should not eliminated")
     // fmt.printfln("Player <%d>'s turn", g_player_with_turn)
-    assert_index(g_player_with_turn, PLAYERS)
+    log.assertf(0 <= g_player_with_turn && g_player_with_turn < PLAYERS, "%d", g_player_with_turn)
 }
 
 place_piece :: proc(target: [2]int) {
-    assert_index(g_source, HAND_SIZE)
-    assert_index(target.x, HIVE_X_LENGTH)
-    assert_index(target.y, HIVE_Y_LENGTH)
+    log.assertf(0 <= g_source && g_source < HAND_SIZE, "%d", g_source)
+    log.assertf(0 <= target.x && target.x < HIVE_X_LENGTH, "%d", target.x)
+    log.assertf(0 <= target.y && target.y < HIVE_Y_LENGTH, "%d", target.y)
     assert(g_hive[target.x][target.y] == .Empty)
     assert(validate_hive(g_hive))
 

@@ -6,17 +6,15 @@ import "core:log"
 import "core:math"
 
 HEXAGON_SIDES :: 6
-HEXAGON_RADIUS: f32 = 40.0
-HEXAGON_ANGLE: f32 = 2.0 * math.PI / HEXAGON_SIDES
-HEXAGON_WIDTH: f32 = HEXAGON_RADIUS * 2
-HEXAGON_HEIGHT: f32 = HEXAGON_RADIUS * math.SQRT_THREE
-HEXAGON_WIDTH_FRACTION: f32 = HEXAGON_WIDTH / 2.7
-HEXAGON_HEIGHT_FRACTION: f32 = HEXAGON_HEIGHT / 2
+g_zoom: f32 = 1.0
 
 SCREEN_WIDTH  :: 1000
 SCREEN_HEIGHT :: 1000
 SCREEN_PADDING_X :: 10
 SCREEN_PADDING_Y :: 10
+
+HIVE_WIDTH :: SCREEN_HEIGHT - (SCREEN_PADDING_X*2)
+HIVE_HEIGHT :: 700
 
 FONT_SIZE :: 12
 HEADER_FONT_SIZE :: 24
@@ -28,6 +26,15 @@ SPACING_Y :: 5
 
 DRAW_GRID :: true
 
+Hexagon :: struct {
+    radius: f32,
+    angle: f32,
+    width: f32,
+    height: f32,
+    width_fraction: f32,
+    height_fraction: f32,
+}
+
 Bug_Colors := [Bug]rl.Color {
     .Empty       = rl.WHITE,
     .Queen       = rl.YELLOW,
@@ -37,12 +44,13 @@ Bug_Colors := [Bug]rl.Color {
     .Beetle      = rl.BLUE,
 }
 
-draw_piece :: proc(offset: rl.Vector2, player_i: int, hand_i: int) {
+// :TODO: Draw piece given the offset is the top left and not the center?
+draw_piece :: proc(offset: rl.Vector2, player_i: int, hand_i: int, hexagon: Hexagon) {
     bug := g_players[player_i].hand[hand_i].bug
     log.assert(bug != .Empty, "Shouldn't be drawing an empty bug")
 
-    rl.DrawPoly(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, g_players[player_i].color)
-    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, 1, rl.BLACK)
+    rl.DrawPoly(offset, HEXAGON_SIDES, hexagon.radius, 0, g_players[player_i].color)
+    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 1, rl.BLACK)
 
     // Draw text inside piece
     text := rl.TextFormat("%s", bug)
@@ -82,37 +90,48 @@ draw_game :: proc() {
     rl.DrawTextEx(FONT, text, text_offset, HEADER_FONT_SIZE, FONT_SPACING, rl.BLACK)
     offset.y += text_size.y + SPACING_Y
 
+    hexagon := get_hexagon(g_zoom)
+
     // Because offset is the center point of the next hexagon
-    offset = { offset.x + (HEXAGON_WIDTH/2), offset.y + (HEXAGON_HEIGHT/2) }
+    offset = { offset.x + (hexagon.width/2), offset.y + (hexagon.height/2) }
     controller := offset.x
 
     // Draw da hive
     for y in 0..<HIVE_Y_LENGTH {
-        offset.x = controller + (f32(y % 2) * HEXAGON_RADIUS * 1.5)
+        offset.x = controller + (f32(y % 2) * hexagon.radius * 1.5)
         // fmt.println(j, rotate, width, height)
         for x in 0..<HIVE_X_LENGTH {
             if g_hive[x][y] == .Empty {
                 if DRAW_GRID {
-                    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, 1, rl.GRAY)
+                    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 1, rl.GRAY)
                     rl.DrawTextEx(FONT, rl.TextFormat("%i %i", x, y), offset, FONT_SIZE, 2, rl.GRAY)
                 }
                 if should_highlight({x, y}, offset) {
-                    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, HEXAGON_RADIUS, 0, 3, rl.BLUE)
+                    rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 3, rl.BLUE)
                 }
             }
             else {
                 player_i, hand_i := lookup_hive_position({x, y})
-                draw_piece(offset, player_i, hand_i)
+                draw_piece(offset, player_i, hand_i, hexagon)
             }
-            offset.x += 3 * HEXAGON_RADIUS
+            offset.x += 3 * hexagon.radius
+            if offset.x >= HIVE_WIDTH {
+                break
+            }
         }
 
-        offset.y += HEXAGON_HEIGHT / 2
+        offset.y += hexagon.height / 2
+        if offset.y >= HIVE_HEIGHT {
+            break
+        }
     }
-    offset.y += (HEXAGON_HEIGHT/2) +SPACING_Y
 
     // Draw bugs in each player's hand
-    offset = { (SCREEN_WIDTH/2)-(HEXAGON_WIDTH*HAND_SIZE/2)+(HEXAGON_WIDTH/2), offset.y }
+    hexagon = get_hexagon(1.0)
+    offset = { 
+        (SCREEN_WIDTH/2) - (hexagon.width*HAND_SIZE/2) + (hexagon.width/2), 
+        offset.y + SPACING_Y + (hexagon.height/2) 
+    }
     controller = offset.x
     for player, i in g_players {
         offset.x = controller
@@ -121,19 +140,37 @@ draw_game :: proc() {
             // Go to next line if bugs don't fit
             if offset.x > SCREEN_WIDTH - SCREEN_PADDING_X {
                 offset.x = controller
-                offset.y += HEXAGON_HEIGHT + SPACING_Y
+                offset.y += hexagon.height + SPACING_Y
             }
 
             if piece.hive_position == {-1, -1} {
-                draw_piece(offset, i, j)
+                draw_piece(offset, i, j, hexagon)
             }
             else {
                 // Don't draw bugs that are no longer in the player's hand
             }
-            offset.x += HEXAGON_WIDTH + SPACING_X
+            offset.x += hexagon.width + SPACING_X
 
         }
-        offset.y += HEXAGON_HEIGHT + SPACING_Y
+        offset.y += hexagon.height + SPACING_Y
     }
 
 }
+
+get_hexagon :: proc(zoom: f32) -> Hexagon {
+    radius: f32 = 40.0 * zoom
+    angle: f32 = 2.0 * math.PI / HEXAGON_SIDES
+    width: f32 = radius * 2
+    height: f32 = radius * math.SQRT_THREE
+    width_fraction: f32 = width / 2.7
+    height_fraction: f32 = height / 2
+    return Hexagon {
+        radius,
+        angle,
+        width,
+        height,
+        width_fraction,
+        height_fraction,
+    }
+}
+
