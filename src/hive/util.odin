@@ -94,7 +94,7 @@ get_iso8601_timestamp :: proc() -> string {
 
 }
 
-get_occupied_positions :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (occupied_positions: int) {
+get_occupied_positions :: proc(hive: Hive) -> (occupied_positions: int) {
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
             if !is_empty({x, y}, hive) {
@@ -170,7 +170,7 @@ can_play :: proc() -> bool {
     return play
 }
 
-get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (losers: [PLAYERS]bool) {
+get_losers :: proc(hive: Hive) -> (losers: [PLAYERS]bool) {
 
     for x in 0..<HIVE_X_LENGTH {
         for y in 0..<HIVE_Y_LENGTH {
@@ -193,7 +193,7 @@ get_losers :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (losers: [PLAYE
     return losers
 }
 
-get_winners :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (winners: [PLAYERS]bool) {
+get_winners :: proc(hive: Hive) -> (winners: [PLAYERS]bool) {
     losers := get_losers(hive)
     for i in 0..<PLAYERS {
         winners[i] = !losers[i]
@@ -201,7 +201,7 @@ get_winners :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (winners: [PLA
     return winners
 }
 
-get_game_outcome :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (game_outcome: GameOutcome) {
+get_game_outcome :: proc(hive: Hive) -> (game_outcome: GameOutcome) {
     winners := get_winners(hive)
     winner_count := slice.count(winners[:], true)
     switch winner_count {
@@ -215,18 +215,6 @@ get_game_outcome :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (game_out
         game_outcome = .Elimination
     }
     return game_outcome
-}
-
-set_hand_bugs :: proc(hand: ^[HAND_SIZE]Piece, bug: Bug, bug_count: int) {
-    for i in 0..<HAND_SIZE {
-        if hand[i].bug == .Empty {
-            for j in 0..<bug_count {
-                hand[i+j].bug = bug
-                hand[i+j].hand_i = i+j
-            }
-            return
-        }
-    }
 }
 
 // See https://pkg.odin-lang.org/core/debug/trace/#Context
@@ -244,5 +232,14 @@ report_assertion_failure :: proc(prefix, message: string, loc := #caller_locatio
 
 is_even :: proc(num: int) -> bool {
     return num % 2 == 0
+}
+
+new_piece :: proc(
+    bug := Bug.Empty, 
+    bounds := Bounds{}, 
+    hive_position := [2]int{-1, -1}, 
+    player_i := -1, 
+    hand_i := -1) -> Piece {
+    return Piece{bug, bounds, hive_position, player_i, hand_i} 
 }
 

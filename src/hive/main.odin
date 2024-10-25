@@ -15,20 +15,23 @@ g_eliminations: [PLAYERS]bool
 g_player_with_turn: int // Index into the g_players array
 g_source: int // Index into the player with turn's hand
 g_destination: int // Index into the placeables array
-QUEENS       :: 1
-ANTS         :: 3
-GRASSHOPPERS :: 3
-SPIDERS      :: 2
-BEETLES      :: 2
-HAND_SIZE :: QUEENS+ANTS+GRASSHOPPERS+SPIDERS+BEETLES
+HAND_SIZE    :: 11
 
 HIVE_X_LENGTH    :: 15
 HIVE_Y_LENGTH      :: 40 
-g_hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack
+g_hive: Hive
 g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
 
 g_sim := false
 g_playback_output_file: os.Handle
+
+Hand_Bugs := [HAND_SIZE]Bug {
+    .Queen,
+    .Ant, .Ant, .Ant,
+    .Grasshopper, .Grasshopper, .Grasshopper,
+    .Spider, .Spider,
+    .Beetle, .Beetle,
+}
 
 Even_Direction_Vectors := [Direction][2]int {
     // .None      = {  0,  0 },
@@ -70,8 +73,8 @@ Opposite_Directions := [Direction]Direction {
 }
 
 // :TODO: Update size for mosquitoes once they are added
-// Hive :: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack
-Stack :: sa.Small_Array(1+BEETLES*PLAYERS, Piece)
+Hive :: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack
+Stack :: sa.Small_Array(HAND_SIZE/2, Piece)
 
 Slide :: struct {
     position: [2]int,
@@ -176,17 +179,9 @@ init_game :: proc() {
     assert(len(g_players) == PLAYERS)
     g_players = {}
     for i in 0..<PLAYERS {
-        bounds := Bounds{ rl.Vector2{-1,-1}, rl.Vector2{-1,-1} }
-        hive_position := [2]int{-1,-1}
-        piece := Piece{ .Empty, bounds, hive_position, i, -1 }
         for j in 0..<HAND_SIZE {
-            g_players[i].hand[j] = piece
+            g_players[i].hand[j] = new_piece(bug=Hand_Bugs[j], player_i=i, hand_i=j)
         }
-        set_hand_bugs(&g_players[i].hand, .Queen, QUEENS)
-        set_hand_bugs(&g_players[i].hand, .Ant, ANTS)
-        set_hand_bugs(&g_players[i].hand, .Grasshopper, GRASSHOPPERS)
-        set_hand_bugs(&g_players[i].hand, .Spider, SPIDERS)
-        set_hand_bugs(&g_players[i].hand, .Beetle, BEETLES)
     }
     g_player_with_turn = 0
 
@@ -274,7 +269,7 @@ update_game :: proc() {
 // is attached to at least one other bug
 //
 // Caller is responsible for asserting that the return value is true
-validate_hive :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (valid_hive: bool) {
+validate_hive :: proc(hive: Hive) -> (valid_hive: bool) {
 
     valid_hive = true
 
