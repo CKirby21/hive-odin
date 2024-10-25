@@ -26,8 +26,6 @@ HIVE_Y_LENGTH      :: 40
 g_hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack
 g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
 
-g_playback_file: os.Handle
-
 Even_Direction_Vectors := [Direction][2]int {
     // .None      = {  0,  0 },
     .North     = {  0, -2 },
@@ -138,20 +136,31 @@ main :: proc() {
     FONT = rl.GetFontDefault()
     rl.SetTargetFPS(60)
 
-    if len(os.args) == 1 {
-        // Only create the playback file for real games
-        g_playback_file = create_playback_file()
-        defer os.close(g_playback_file)
+    playback_input_filepath := ""
+    if len(os.args) == 2 {
+        g_sim = true
+        playback_input_filepath = os.args[1]
+    }
 
-        init_game()
-        for !rl.WindowShouldClose() { // Detect window close button or ESC key
-            update_game()
-            draw_game()
-        }
+    if g_sim {
+        setup_playback(playback_input_filepath)
     } else {
-        assert(len(os.args) == 2)
-        assert(len(os.args) == 2)
-        playback_game(os.args[1])
+        // Only create the playback file for real games
+        g_playback_output_file = create_playback_output_file()
+        defer os.close(g_playback_output_file)
+    }
+
+    init_game()
+    for !rl.WindowShouldClose() { // Detect window close button or ESC key
+        if g_sim {
+            finished := playback_line()
+            if finished {
+                log.debug("Playback finished")
+                break
+            }
+        }
+        update_game()
+        draw_game()
     }
 }
 
@@ -207,8 +216,13 @@ update_game :: proc() {
         return
     }
 
-    if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-        mouse := rl.GetMousePosition()
+    mouse := rl.GetMousePosition()
+    left_mouse_pressed := rl.IsMouseButtonPressed(rl.MouseButton.LEFT)
+    if g_sim {
+        left_mouse_pressed, mouse = get_simulated_mouse(rl.MouseButton.LEFT)
+    }
+
+    if left_mouse_pressed {
         if g_source == -1 {
             for player, i in g_players {
                 for piece, j in player.hand {
@@ -226,7 +240,7 @@ update_game :: proc() {
                             log.debugf("Tried to select a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
                         } else {
                             g_source = j
-                            os.write_string(g_playback_file, fmt.aprintln("source", g_source))
+                            write_playback_source(g_source)
                             log.debugf("Selected a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
                         }
                     }
@@ -237,7 +251,7 @@ update_game :: proc() {
             for destination in 0..<sa.len(g_placeables) {
                 piece := sa.get(g_placeables, destination)
                 if within_bounds(piece.bounds, mouse) {
-                    os.write_string(g_playback_file, fmt.aprintln("destination", destination))
+                    write_playback_destination(destination)
                     place_piece(g_source, destination)
                 }
             }
@@ -350,6 +364,9 @@ get_slides :: proc(position: [2]int, hive := g_hive) ->
 
 populate_distinct_slides :: proc(position: [2]int, hive := g_hive, slide_count: int) {
     slides := get_slides(position, hive)
+    if sa.len(slides) == 0 {
+        return
+    }
     log.assertf(0 <= slide_count && slide_count < sa.len(slides) - 1, "%d", slide_count)
     left := Piece{.Empty, Bounds{}, sa.get(slides, slide_count-1).position, -1, -1 }
     sa.append(&g_placeables, left)

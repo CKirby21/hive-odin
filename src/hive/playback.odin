@@ -9,8 +9,29 @@ import "core:strings"
 import "core:strconv"
 import sa "core:container/small_array"
 
+g_playback_stopwatch: time.Stopwatch
+g_playback_input := ""
+
+g_playback_output_file: os.Handle
+
+g_sim := false
+
+@(private="file")
+sim_mouse: rl.Vector2
+
+@(private="file")
+Sim_Mouse_Button_Presses := [rl.MouseButton]bool {
+    .LEFT    = false,
+    .RIGHT   = false,
+    .MIDDLE  = false,
+    .SIDE    = false,
+    .EXTRA   = false,
+    .FORWARD = false,
+    .BACK    = false,
+}
+
 // Caller is responsible for calling close on g_game_file
-create_playback_file :: proc() -> os.Handle {
+create_playback_output_file :: proc() -> os.Handle {
     mode: int = 0
 	when ODIN_OS == .Linux || ODIN_OS == .Darwin {
 		mode = os.S_IRUSR | os.S_IWUSR | os.S_IRGRP | os.S_IROTH
@@ -22,57 +43,79 @@ create_playback_file :: proc() -> os.Handle {
     return playback_file
 }
 
-playback_game :: proc(playback_filepath: string) {
-    init_game()
+write_to_playback_output_file :: proc(name: string, value: int) {
+    // if g_sim { return }
+    os.write_string(g_playback_output_file, fmt.aprintln(name, value))
+}
 
-    data, ok := os.read_entire_file(playback_filepath, context.allocator)
+write_playback_source :: proc(val: int) {
+    write_to_playback_output_file("source", val)
+}
+
+write_playback_destination :: proc(val: int) {
+    write_to_playback_output_file("destination", val)
+}
+
+setup_playback :: proc(playback_input_filepath: string) {
+    log.debugf("Setting up playback with <%s>", playback_input_filepath)
+    data, ok := os.read_entire_file(playback_input_filepath, context.allocator)
     defer delete(data)
     assert(ok)
-    data_string := string(data)
+    g_playback_input = strings.clone(string(data))
+}
 
+// :TODO: take in a string instead of a filepath for sim testing
+// Sim testing could pass seed via command line and use GNU parallel or xargs
+playback_line :: proc() -> (finished: bool) {
 
-    stopwatch: time.Stopwatch
-    time.stopwatch_start(&stopwatch)
+    log.assert(g_playback_input != "", "Must call setup playback first")
+
+    if !g_playback_stopwatch.running {
+        log.debug("Starting playback stopwatch")
+        time.stopwatch_start(&g_playback_stopwatch)
+    }
+
     delay := 500 * time.Millisecond
-    log.debugf("Playback starting with a delay of %.0f ms between lines...", time.duration_milliseconds(delay))
 
-    for !rl.WindowShouldClose() {
-        if time.stopwatch_duration(stopwatch) > delay {
-            line, ok := strings.split_lines_iterator(&data_string)
-            if !ok {
-                break
-            }
-            if line == "" {
-                continue
-            }
+    if time.stopwatch_duration(g_playback_stopwatch) > delay {
+        line, ok := strings.split_lines_iterator(&g_playback_input)
+        if !ok {
+            return true
+        }
+        if line != "" {
             log.debugf("Playing back <%s>", line)
             fields := strings.fields(line)
             assert(len(fields) == 2)
 
             switch fields[0] {
             case "source":
-                // :FIXME: Theres gotta be a better way to not duplicate this
-                // Maybe populate_places should return a placeables array instead of 
-                // modifying the global?
-                reset_turn_variables()
                 g_source = strconv.atoi(fields[1])
-                piece := g_players[g_player_with_turn].hand[g_source]
-                if is_in_hand(g_source) {
-                    populate_places()
-                } else if is_move_allowed(piece) {
-                    populate_moves(g_source)
-                }
+                bounds := g_players[g_player_with_turn].hand[g_source].bounds
+                simulate_press(bounds, rl.MouseButton.LEFT)
             case "destination":
                 destination := strconv.atoi(fields[1])
-                place_piece(g_source, destination)
+                bounds := sa.get(g_placeables, destination).bounds
+                simulate_press(bounds, rl.MouseButton.LEFT)
             }
-            time.stopwatch_reset(&stopwatch)
-            time.stopwatch_start(&stopwatch)
+            time.stopwatch_reset(&g_playback_stopwatch)
+            time.stopwatch_start(&g_playback_stopwatch)
         }
-        update_game()
-        draw_game()
     }
-    log.debug("Finished playback.")
+    return false
 }
 
+simulate_press :: proc(bounds: Bounds, mouse_button: rl.MouseButton) {
+    sim_mouse = rl.Vector2{
+        (bounds.max.x - bounds.min.x) / 2,
+        (bounds.max.y - bounds.min.y) / 2,
+    }
+    Sim_Mouse_Button_Presses[mouse_button] = true
+}
+
+get_simulated_mouse :: proc(mouse_button: rl.MouseButton) -> (pressed: bool, mouse: rl.Vector2) {
+    pressed = Sim_Mouse_Button_Presses[mouse_button]
+    Sim_Mouse_Button_Presses[mouse_button] = false
+    mouse = sim_mouse
+    return pressed, mouse
+}
 
