@@ -239,6 +239,11 @@ update_game :: proc() {
         }
     }
 
+    // Force the player to place their queen
+    if get_friendlies() == 3 && !is_friendly_queen_played(g_player_with_turn) {
+        g_source = get_hand_i(.Queen)
+    }
+
     // Decide if the g_source is legit. If it isn't, then clear it
     if g_source != -1 && sa.len(g_placeables) == 0 {
         err: bool = true

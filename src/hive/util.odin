@@ -105,6 +105,32 @@ get_occupied_positions :: proc(hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack) -> (oc
     return occupied_positions
 }
 
+get_friendlies :: proc(player_i := g_player_with_turn, hive := g_hive) -> (friendlies: int) {
+    for x in 0..<HIVE_X_LENGTH {
+        for y in 0..<HIVE_Y_LENGTH {
+            stack := g_hive[x][y]
+            for z in 0..<sa.len(stack) {
+                piece := sa.get(stack, z)
+                if piece.player_i == player_i {
+                    friendlies += 1
+                }
+            }
+        }
+    }
+    return friendlies 
+}
+
+get_hand_i :: proc(bug: Bug, player_i := g_player_with_turn) -> (hand_i: int) {
+    for player, j in g_players {
+        for piece, i in player.hand {
+            if j == player_i && piece.bug == bug {
+                hand_i = i
+            }
+        }
+    }
+    return hand_i 
+}
+
 update_bounds :: proc(bounds: ^Bounds, offset: rl.Vector2) {
     hexagon := get_hexagon(g_zoom)
     bounds.min = {offset.x-hexagon.width_fraction, offset.y-hexagon.height_fraction}
@@ -127,6 +153,7 @@ is_in_hand :: proc(i_hand: int) -> bool {
     return g_players[g_player_with_turn].hand[i_hand].hive_position == {-1, -1}
 }
 
+// :FIXME:
 can_play :: proc() -> bool {
     play := false
     for piece, i in g_players[g_player_with_turn].hand {
