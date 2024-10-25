@@ -14,6 +14,7 @@ g_players: [PLAYERS]Player
 g_eliminations: [PLAYERS]bool
 g_player_with_turn: int // Index into the g_players array
 g_source: int // Index into the player with turn's hand
+g_destination: int // Index into the placeables array
 QUEENS       :: 1
 ANTS         :: 3
 GRASSHOPPERS :: 3
@@ -25,6 +26,9 @@ HIVE_X_LENGTH    :: 15
 HIVE_Y_LENGTH      :: 40 
 g_hive: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack
 g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
+
+g_sim := false
+g_playback_output_file: os.Handle
 
 Even_Direction_Vectors := [Direction][2]int {
     // .None      = {  0,  0 },
@@ -195,7 +199,7 @@ init_game :: proc() {
     assert(len(g_hive) == HIVE_X_LENGTH)
     g_hive = {}
 
-    reset_turn_variables()
+    init_turn_variables()
 
     log.debug("Finished initializing state.")
 }
@@ -216,47 +220,48 @@ update_game :: proc() {
         return
     }
 
-    mouse := rl.GetMousePosition()
-    left_mouse_pressed := rl.IsMouseButtonPressed(rl.MouseButton.LEFT)
-    if g_sim {
-        left_mouse_pressed, mouse = get_simulated_mouse(rl.MouseButton.LEFT)
+    if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+        mouse := rl.GetMousePosition()
+        for player, i in g_players {
+            for piece, j in player.hand {
+                if within_bounds(piece.bounds, mouse) && i == g_player_with_turn && g_source == -1 {
+                    g_source = j
+                    write_playback_source(g_source)
+                }
+            }
+        }
+        for destination in 0..<sa.len(g_placeables) {
+            piece := sa.get(g_placeables, destination)
+            if within_bounds(piece.bounds, mouse) && g_destination == -1 {
+                g_destination = destination
+                write_playback_destination(g_destination)
+            }
+        }
     }
 
-    if left_mouse_pressed {
-        if g_source == -1 {
-            for player, i in g_players {
-                for piece, j in player.hand {
-                    if within_bounds(piece.bounds, mouse) && i == g_player_with_turn {
-                        err: bool = true
-                        reset_turn_variables()
-                        if is_in_hand(j) {
-                            err = populate_places()
-                        } else if is_move_allowed(piece) {
-                            err = populate_moves(j)
-                        }
-
-                        if err {
-                            reset_turn_variables()
-                            log.debugf("Tried to select a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
-                        } else {
-                            g_source = j
-                            write_playback_source(g_source)
-                            log.debugf("Selected a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, i, j)
-                        }
-                    }
-                }
-            }
-        } else {
-            log.assertf(0 <= g_source && g_source < HAND_SIZE, "%d", g_source)
-            for destination in 0..<sa.len(g_placeables) {
-                piece := sa.get(g_placeables, destination)
-                if within_bounds(piece.bounds, mouse) {
-                    write_playback_destination(destination)
-                    place_piece(g_source, destination)
-                }
-            }
-            reset_turn_variables()
+    // Decide if the g_source is legit. If it isn't, then clear it
+    if g_source != -1 && sa.len(g_placeables) == 0 {
+        err: bool = true
+        piece := g_players[g_player_with_turn].hand[g_source]
+        if is_in_hand(piece.hand_i) {
+            err = populate_places()
+        } else if is_move_allowed(piece) {
+            err = populate_moves(piece.hand_i)
         }
+
+        if err {
+            init_turn_variables()
+            log.debugf("Tried to select a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, g_player_with_turn, g_source)
+        } else {
+            log.debugf("Selected a <%s> from Player <%d> at hand_i <%d>\n", piece.bug, g_player_with_turn, g_source)
+        }
+    }
+    else if g_destination != -1 {
+        assert(sa.len(g_placeables) != 0)
+        log.assertf(0 <= g_source && g_source < HAND_SIZE, "%d", g_source)
+        log.debugf("Selected a destination <%d>\n", g_destination)
+        place_piece()
+        init_turn_variables()
     }
 }
 
@@ -509,7 +514,7 @@ populate_places :: proc() -> (err: bool) {
 
 advance_turn :: proc() {
     log.assertf(0 <= g_player_with_turn && g_player_with_turn < PLAYERS, "%d", g_player_with_turn)
-    reset_turn_variables()
+    init_turn_variables()
 
     for _ in 0..<PLAYERS {
         g_player_with_turn += 1
@@ -523,24 +528,24 @@ advance_turn :: proc() {
     log.assertf(0 <= g_player_with_turn && g_player_with_turn < PLAYERS, "%d", g_player_with_turn)
 }
 
-// source is index into the player's hand
-// destination is index into the placeables array
-place_piece :: proc(source: int, destination: int) {
-    log.assertf(0 <= source && source < HAND_SIZE, "%d", source)
-    log.assertf(0 <= destination && destination < sa.len(g_placeables), "%d", destination)
-    position := sa.get(g_placeables, destination).hive_position
+// g_source is index into the player's hand
+// g_destination is index into the placeables array
+place_piece :: proc() {
+    log.assertf(0 <= g_source && g_source < HAND_SIZE, "%d", g_source)
+    log.assertf(0 <= g_destination && g_destination < sa.len(g_placeables), "%d", g_destination)
+    position := sa.get(g_placeables, g_destination).hive_position
     log.assertf(0 <= position.x && position.x < HIVE_X_LENGTH, "%d", position.x)
     log.assertf(0 <= position.y && position.y < HIVE_Y_LENGTH, "%d", position.y)
     assert(validate_hive(g_hive))
 
-    if !is_in_hand(source) {
-        source := g_players[g_player_with_turn].hand[source].hive_position
-        sa.pop_back(&g_hive[source.x][source.y])
+    if !is_in_hand(g_source) {
+        g_source := g_players[g_player_with_turn].hand[g_source].hive_position
+        sa.pop_back(&g_hive[g_source.x][g_source.y])
     }
 
-    piece := g_players[g_player_with_turn].hand[source]
+    piece := g_players[g_player_with_turn].hand[g_source]
     sa.append(&g_hive[position.x][position.y], piece)
-    g_players[g_player_with_turn].hand[source].hive_position = position
+    g_players[g_player_with_turn].hand[g_source].hive_position = position
     log.debugf("Player <%d> placed <%s> at <%d %d>", g_player_with_turn, piece.bug, position.x, position.y)
 
     advance_turn()
@@ -548,8 +553,9 @@ place_piece :: proc(source: int, destination: int) {
     assert(validate_hive(g_hive))
 }
 
-reset_turn_variables :: proc() {
+init_turn_variables :: proc() {
     g_source = -1
+    g_destination = -1
     sa.clear(&g_placeables)
 }
 
