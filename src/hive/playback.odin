@@ -40,7 +40,7 @@ setup_playback :: proc(playback_input_filepath: string) {
     log.debugf("Setting up playback with <%s>", playback_input_filepath)
     data, ok := os.read_entire_file(playback_input_filepath, context.allocator)
     defer delete(data)
-    assert(ok)
+    log.assert(ok, "There was a problem reading in the playback file")
     data_str := string(data)
     trimmed_data_str := strings.trim(data_str, "\n")
     g_playback_input = strings.clone(trimmed_data_str)

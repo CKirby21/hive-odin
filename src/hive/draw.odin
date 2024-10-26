@@ -25,8 +25,6 @@ FONT: rl.Font
 SPACING_X :: 0
 SPACING_Y :: 5 
 
-DRAW_GRID :: false
-
 Hexagon :: struct {
     radius: f32,
     angle: f32,
@@ -133,7 +131,7 @@ draw_game :: proc() {
         // fmt.println(j, rotate, width, height)
         for x in hive_bounds.min.x..<hive_bounds.max.x {
             if is_empty({x, y}) {
-                if DRAW_GRID {
+                if g_args.draw_grid {
                     rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 1, rl.GRAY)
                     rl.DrawTextEx(FONT, rl.TextFormat("%i %i", x, y), offset, FONT_SIZE, 2, rl.GRAY)
                 }

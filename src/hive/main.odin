@@ -9,6 +9,8 @@ import "core:os"
 import "core:slice"
 import sa "core:container/small_array"
 
+import "argparse"
+
 PLAYERS :: 2
 g_players: [PLAYERS]Player
 g_eliminations: [PLAYERS]bool
@@ -24,6 +26,10 @@ g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
 
 g_sim := false
 g_playback_output_file: os.Handle
+g_args := Args {
+    playback_input_filepath="",
+    draw_grid=false,
+}
 
 Hand_Bugs := [HAND_SIZE]Bug {
     .Queen,
@@ -130,6 +136,11 @@ Logger_Opts :: log.Options{
 	.Line,
 }
 
+Args :: struct {
+    playback_input_filepath: string,
+    draw_grid: bool
+}
+
 main :: proc() {
     context.assertion_failure_proc = report_assertion_failure
 
@@ -137,25 +148,29 @@ main :: proc() {
     context.logger = logger
     defer log.destroy_console_logger(logger)
 
+    ap := argparse.new_argument_parser()
+    argparse.add_option(&ap, &g_args.playback_input_filepath, "-p", "-playback-filepath", .Store, 
+        "The file that will be played back")
+    argparse.add_option(&ap, &g_args.draw_grid, "-g", "-grid", .StoreTrue, 
+        "Draw the hive grid")
+    argparse.parse_args_or_exit(ap)
+    defer argparse.close(&ap)
+
+    fmt.println(g_args.draw_grid)
+
+    if g_args.playback_input_filepath == "" {
+        // Only create the playback file for real games
+        g_playback_output_file = create_playback_output_file()
+    } else {
+        g_sim = true
+        setup_playback(g_args.playback_input_filepath)
+    }
+
     rl.InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "")
     defer rl.CloseWindow()   
     
     FONT = rl.GetFontDefault()
     rl.SetTargetFPS(60)
-
-    playback_input_filepath := ""
-    if len(os.args) == 2 {
-        g_sim = true
-        playback_input_filepath = os.args[1]
-    }
-
-    if g_sim {
-        setup_playback(playback_input_filepath)
-    } else {
-        // Only create the playback file for real games
-        g_playback_output_file = create_playback_output_file()
-        defer os.close(g_playback_output_file)
-    }
 
     init_game()
     for !rl.WindowShouldClose() { // Detect window close button or ESC key
@@ -168,6 +183,10 @@ main :: proc() {
         }
         update_game()
         draw_game()
+    }
+
+    if !g_sim {
+        os.close(g_playback_output_file)
     }
 }
 
