@@ -149,9 +149,9 @@ main :: proc() {
     defer log.destroy_console_logger(logger)
 
     ap := argparse.new_argument_parser()
-    argparse.add_option(&ap, &g_args.playback_input_filepath, "-p", "-playback-filepath", .Store, 
+    argparse.add_option(&ap, &g_args.playback_input_filepath, {"-p", "-playback-filepath"}, .Store, 
         "The file that will be played back")
-    argparse.add_option(&ap, &g_args.draw_grid, "-g", "-grid", .StoreTrue, 
+    argparse.add_option(&ap, &g_args.draw_grid, {"-g", "-grid"}, .StoreTrue, 
         "Draw the hive grid")
     argparse.parse_args_or_exit(ap)
     defer argparse.close(&ap)

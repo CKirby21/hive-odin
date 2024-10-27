@@ -19,8 +19,7 @@ Action :: enum {
 
 Option :: struct {
     value: Value,
-    short: string,
-    long: string,
+    names: []string,
     action: Action,
     help: string
 }
@@ -41,10 +40,12 @@ print_usage :: proc(ap: ArgumentParser, input_args := os.args) {
     fmt.println()
     for option in ap.options {
         fmt.print("\t")
-        if option.short != "" {
-            fmt.printf("%s, ", option.short)
+        for name, i in option.names {
+            fmt.print(name)
+            if i != len(option.names) - 1 {
+                fmt.print(", ")
+            }
         }
-        fmt.printf(option.long)
         if option.action == .Store {
             switch _ in option.value {
             case ^string:
@@ -68,8 +69,8 @@ add_description :: proc(ap: ^ArgumentParser, description: string) {
     ap.description = description
 }
 
-add_option :: proc(ap: ^ArgumentParser, value: Value, short: string, long: string, action: Action, help: string) {
-    append(&ap.options, Option{ value, short, long, action, help })
+add_option :: proc(ap: ^ArgumentParser, value: Value, names: []string, action: Action, help: string) {
+    append(&ap.options, Option{ value, names, action, help })
 }
 
 parse_args_or_exit :: proc(ap: ArgumentParser, input_args := os.args) {
@@ -79,7 +80,9 @@ parse_args_or_exit :: proc(ap: ArgumentParser, input_args := os.args) {
     }
 }
 
+@(require_results)
 parse_args :: proc(ap: ArgumentParser, input_args := os.args) -> (exit: bool) {
+
     for i in 1..<len(input_args) {
         switch input_args[i] {
         case "-help", "-h":
@@ -90,42 +93,45 @@ parse_args :: proc(ap: ArgumentParser, input_args := os.args) -> (exit: bool) {
 
     i := 1 // Start at 1 to skip program name
     for i < len(input_args) {
-        input_arg_valid := false
+        input_arg_found := false
         for &option in ap.options {
-            fmt.println(option.long)
-            switch input_args[i] {
-            case option.long, option.short:
-                switch option.action {
-                case .Store:
-                    if i + 1 >= len(input_args) {
-                        print_usage(ap, input_args)
+            for name in option.names {
+                if name == input_args[i] {
+                    input_arg_found = true
+                }
+            }
+            if !input_arg_found {
+                continue
+            }
+            switch option.action {
+            case .Store:
+                if i + 1 >= len(input_args) {
+                    print_usage(ap, input_args)
+                    return true
+                }
+                value_str := input_args[i+1]
+                switch _ in option.value {
+                case ^string:
+                    option.value.(^string)^ = value_str
+                case ^int:
+                    value, ok := strconv.parse_int(value_str)
+                    if !ok {
+                        fmt.printfln("Unable to parse <%s> to int", value_str)
                         return true
                     }
-                    value_str := input_args[i+1]
-                    switch _ in option.value {
-                    case ^string:
-                        option.value.(^string)^ = value_str
-                    case ^int:
-                        value, ok := strconv.parse_int(value_str)
-                        if !ok {
-                            fmt.printfln("Unable to parse <%s> to int", value_str)
-                            return true
-                        }
-                        option.value.(^int)^ = value
-                    case ^bool:
-                    }
-                    i += 2
-                case .StoreTrue:
-                    option.value.(^bool)^ = true
-                    i += 1
-                case .StoreFalse:
-                    option.value.(^bool)^ = false
-                    i += 1
+                    option.value.(^int)^ = value
+                case ^bool:
                 }
-                input_arg_valid = true
+                i += 2
+            case .StoreTrue:
+                option.value.(^bool)^ = true
+                i += 1
+            case .StoreFalse:
+                option.value.(^bool)^ = false
+                i += 1
             }
         }
-        if !input_arg_valid {
+        if !input_arg_found {
             print_usage(ap, input_args)
             return true
         }
