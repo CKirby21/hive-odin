@@ -1,6 +1,6 @@
 # hive-odin
 
-A desktop application written in Odin that aims to replicate and extend the Hive board game
+A desktop application written in Odin that is inspired by the Hive board game
 
 ## Features
 
