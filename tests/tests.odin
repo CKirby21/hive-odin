@@ -1,6 +1,6 @@
 package tests
 
-import h "../src/hive"
+import h "../src"
 import "core:testing"
 import "core:fmt"
 import sa "core:container/small_array"
