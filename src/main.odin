@@ -11,134 +11,18 @@ import sa "core:container/small_array"
 
 import "argparse"
 
-PLAYERS :: 2
 g_players: [PLAYERS]Player
 g_eliminations: [PLAYERS]bool
 g_player_with_turn: int // Index into the g_players array
 g_source: int // Index into the player with turn's hand
 g_destination: int // Index into the placeables array
-HAND_SIZE    :: 11
-
-HIVE_X_LENGTH    :: 15
-HIVE_Y_LENGTH      :: 40 
 g_hive: Hive
 g_placeables: sa.Small_Array(HAND_SIZE * PLAYERS * 6, Piece)
-
 g_sim := false
 g_playback_output_file: os.Handle
 g_args := Args {
     playback_input_filepath="",
     draw_grid=false,
-}
-
-Hand_Bugs := [HAND_SIZE]Bug {
-    .Queen,
-    .Ant, .Ant, .Ant,
-    .Grasshopper, .Grasshopper, .Grasshopper,
-    .Spider, .Spider,
-    .Beetle, .Beetle,
-}
-
-Even_Direction_Vectors := [Direction][2]int {
-    // .None      = {  0,  0 },
-    .North     = {  0, -2 },
-    .Northeast = {  0, -1 },
-    .Southeast = {  0,  1 },
-    .South     = {  0,  2 },
-    .Southwest = { -1,  1 },
-    .Northwest = { -1, -1 },
-}
-
-// North and South do not change depeding on y, every other direction does
-Odd_Direction_Vectors := [Direction][2]int {
-    // .None      = {  0,  0 },
-    .North     = Even_Direction_Vectors[.North],
-    .Northeast = {  1, -1 },
-    .Southeast = {  1,  1 },
-    .South     = Even_Direction_Vectors[.South],
-    .Southwest = {  0,  1 },
-    .Northwest = {  0, -1 },
-}
-
-Adjacent_Directions := [Direction][2]Direction {
-    .North     = { .Northwest, .Northeast },
-    .Northeast = { .North,     .Southeast },
-    .Southeast = { .Northeast, .South },
-    .South     = { .Southeast, .Southwest },
-    .Southwest = { .South,     .Northwest },
-    .Northwest = { .Southwest, .North },
-}
-
-Opposite_Directions := [Direction]Direction {
-    .North     = .South,
-    .Northeast = .Southwest,
-    .Southeast = .Northwest,
-    .South     = .North,
-    .Southwest = .Northeast,
-    .Northwest = .Southeast,
-}
-
-// :TODO: Update size for mosquitoes once they are added
-Hive :: [HIVE_X_LENGTH][HIVE_Y_LENGTH]Stack
-Stack :: sa.Small_Array(HAND_SIZE/2, Piece)
-
-Slide :: struct {
-    position: [2]int,
-    direction: Direction
-}
-
-Bounds :: struct {
-    min: rl.Vector2,
-    max: rl.Vector2,
-}
-
-PositionBounds :: struct {
-    min: [2]int,
-    max: [2]int,
-}
-
-Player :: struct {
-    hand: [HAND_SIZE]Piece,
-    color: rl.Color
-}
-
-Bug :: enum {
-    Empty, // Zero Value
-    Queen,
-    Ant,
-    Grasshopper,
-    Spider,
-    Beetle,
-}
-
-Direction :: enum {
-    // None, // Zero Value
-    North,
-    Northeast,
-    Southeast,
-    South,
-    Southwest,
-    Northwest
-}
-
-Piece :: struct {
-    bug: Bug,
-    bounds: Bounds,
-    hive_position: [2]int,
-    player_i: int,
-    hand_i: int,
-}
-
-Logger_Opts :: log.Options{
-	.Level,
-	.Terminal_Color,
-	.Short_File_Path,
-	.Line,
-}
-
-Args :: struct {
-    playback_input_filepath: string,
-    draw_grid: bool
 }
 
 main :: proc() {
