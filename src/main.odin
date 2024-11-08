@@ -120,12 +120,13 @@ update_game :: proc() {
 
     if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
         mouse := rl.GetMousePosition()
-        for player, i in g_players {
-            for piece, j in player.hand {
-                if within_bounds(piece.bounds, mouse) && i == g_player_with_turn && g_source == -1 {
-                    g_source = j
-                    write_playback_source(g_source)
-                }
+        deselect := true
+        for piece, i in g_players[g_player_with_turn].hand {
+            if within_bounds(piece.bounds, mouse) {
+                init_turn_variables()
+                g_source = i
+                write_playback_source(g_source)
+                deselect = false
             }
         }
         for destination in 0..<sa.len(g_placeables) {
@@ -133,7 +134,11 @@ update_game :: proc() {
             if within_bounds(piece.bounds, mouse) && g_destination == -1 {
                 g_destination = destination
                 write_playback_destination(g_destination)
+                deselect = false
             }
+        }
+        if deselect {
+            init_turn_variables()
         }
     }
 
