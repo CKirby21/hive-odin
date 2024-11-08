@@ -43,7 +43,6 @@ Bug_Colors := [Bug]rl.Color {
     .Beetle      = rl.BLUE,
 }
 
-// :TODO: Draw piece given the offset is the top left and not the center?
 draw_piece :: proc(offset: rl.Vector2, player_i: int, hand_i: int, hexagon: Hexagon) {
     bug := g_players[player_i].hand[hand_i].bug
     log.assert(bug != .Empty, "Shouldn't be drawing an empty bug")
@@ -56,6 +55,10 @@ draw_piece :: proc(offset: rl.Vector2, player_i: int, hand_i: int, hexagon: Hexa
     text_size := rl.MeasureTextEx(FONT, text, FONT_SIZE, FONT_SPACING)
     text_offset: rl.Vector2 = {offset.x-(text_size.x/2), offset.y-(text_size.y/2)}
     rl.DrawTextEx(FONT, text, text_offset, FONT_SIZE, FONT_SPACING, Bug_Colors[bug])
+
+    if player_i == g_player_with_turn && hand_i == g_source {
+        rl.DrawPolyLinesEx(offset, HEXAGON_SIDES, hexagon.radius, 0, 3, rl.BLUE)
+    }
 
     update_bounds(&g_players[player_i].hand[hand_i].bounds, offset)
 }
